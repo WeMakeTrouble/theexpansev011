@@ -1,0 +1,226 @@
+/**
+ * ============================================================================
+ * WWDD Gunsight View — CMS Styles
+ * File: public/cms/css/wwddGunsightView.css
+ * ============================================================================
+ * Right panel styles for the WWDD Engine instrument.
+ * Canvas styles live in wwddGunsightCanvas.js (inline via JS).
+ * ============================================================================
+ */
+
+/* ============================================================================
+ * RIGHT PANEL WRAPPER
+ * ============================================================================ */
+
+.wwdd-right {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    padding: 12px;
+    font-family: 'IBM Plex Mono', 'SF Mono', 'Consolas', monospace;
+    color: #00ff7f;
+    font-size: 11px;
+}
+
+.wwdd-waiting {
+    color: rgba(0, 255, 127, 0.4);
+    font-size: 11px;
+    padding: 16px 0;
+}
+
+/* ============================================================================
+ * HEADER
+ * ============================================================================ */
+
+.wwdd-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    border-bottom: 1px solid rgba(0, 255, 127, 0.15);
+}
+
+.wwdd-title {
+    font-family: 'Orbitron', 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 3px;
+    color: rgba(0, 255, 127, 0.7);
+}
+
+.wwdd-badge {
+    font-size: 9px;
+    letter-spacing: 2px;
+    padding: 2px 6px;
+    border: 1px solid rgba(0, 255, 127, 0.3);
+    color: rgba(0, 255, 127, 0.6);
+}
+
+.wwdd-badge--surfacing {
+    border-color: #00ff7f;
+    color: #00ff7f;
+    box-shadow: 0 0 6px rgba(0, 255, 127, 0.3);
+}
+
+.wwdd-badge--warming {
+    border-color: rgba(0, 255, 127, 0.2);
+    color: rgba(0, 255, 127, 0.35);
+}
+
+/* ============================================================================
+ * READOUTS
+ * ============================================================================ */
+
+.wwdd-readouts {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.wwdd-readout-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 2px 0;
+}
+
+.wwdd-rkey {
+    color: rgba(0, 255, 127, 0.5);
+}
+
+.wwdd-rval {
+    color: #00ff7f;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 0 4px rgba(0, 255, 127, 0.4);
+}
+
+/* ============================================================================
+ * HYPOTHESIS BREAKDOWN
+ * ============================================================================ */
+
+.wwdd-hyp-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: rgba(0, 255, 127, 0.5);
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(0, 255, 127, 0.1);
+}
+
+.wwdd-hyp-list {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.wwdd-hyp-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 10px;
+}
+
+.wwdd-hyp-active .wwdd-hyp-label {
+    color: #00ff7f;
+}
+
+.wwdd-hyp-label {
+    width: 90px;
+    flex-shrink: 0;
+    color: rgba(0, 255, 127, 0.5);
+    font-size: 9px;
+    letter-spacing: 0.5px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.wwdd-hyp-bar-track {
+    flex: 1;
+    height: 4px;
+    background: rgba(0, 255, 127, 0.08);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.wwdd-hyp-bar-fill {
+    height: 100%;
+    background: rgba(0, 255, 127, 0.4);
+    border-radius: 2px;
+    transition: width 0.4s ease;
+}
+
+.wwdd-hyp-active .wwdd-hyp-bar-fill {
+    background: #00ff7f;
+    box-shadow: 0 0 4px rgba(0, 255, 127, 0.5);
+}
+
+.wwdd-hyp-pct {
+    width: 30px;
+    text-align: right;
+    color: rgba(0, 255, 127, 0.5);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+}
+
+.wwdd-hyp-active .wwdd-hyp-pct {
+    color: #00ff7f;
+}
+
+/* ============================================================================
+ * SURFACING ZONE
+ * ============================================================================ */
+
+.wwdd-surface-zone {
+    border: 1px solid rgba(0, 255, 127, 0.3);
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(0, 255, 127, 0.03);
+}
+
+.wwdd-surface-hint {
+    font-size: 10px;
+    color: rgba(0, 255, 127, 0.6);
+    line-height: 1.4;
+}
+
+.wwdd-surface-btn {
+    background: transparent;
+    border: 1px solid #00ff7f;
+    color: #00ff7f;
+    font-family: 'Orbitron', 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    padding: 6px 12px;
+    cursor: pointer;
+    text-shadow: 0 0 6px rgba(0, 255, 127, 0.5);
+    box-shadow: 0 0 8px rgba(0, 255, 127, 0.15);
+    transition: all 0.2s ease;
+}
+
+.wwdd-surface-btn:hover {
+    background: rgba(0, 255, 127, 0.08);
+    box-shadow: 0 0 12px rgba(0, 255, 127, 0.3);
+}
+
+.wwdd-surface-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.wwdd-surface-result {
+    font-size: 10px;
+    color: rgba(0, 255, 127, 0.5);
+    min-height: 14px;
+}
+
+.wwdd-surface-result--success {
+    color: #00ff7f;
+    text-shadow: 0 0 4px rgba(0, 255, 127, 0.4);
+}
+
+.wwdd-surface-result--error {
+    color: #ff3333;
+}

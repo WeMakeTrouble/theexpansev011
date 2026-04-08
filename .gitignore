@@ -1,0 +1,17 @@
+node_modules/
+.env
+*.tar.gz
+*.backup*
+*.bak*
+*.broken
+temp_*.js
+.DS_Store
+*.log
+uploads/assets/
+session_store/
+.env.*
+backups/
+*.backup.*
+*.edit_notes.*
+server.js.backup*
+tse_audit_backup*/

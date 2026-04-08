@@ -1,0 +1,288 @@
+/**
+ * ============================================================================
+ * cotw-styles.css — Council of the Wise Terminal Styles (v010)
+ * ============================================================================
+ *
+ * PURPOSE
+ * -------
+ * Four-panel layout and chat styling for the COTW user terminal.
+ * Inherits terminal aesthetic from shared cms-styles.css design tokens.
+ * Adds dossier panel, mobile tabs, chat message variants, and
+ * connection status indicators.
+ *
+ * ARCHITECTURE
+ * ------------
+ * Uses @layer to integrate with cms-styles.css layer stack.
+ * All custom properties reference tokens from :root in cms-styles.css.
+ *
+ * LAYOUT (DESKTOP)
+ * ----------------
+ * ┌──────────┬────────────────┬──────────┐
+ * │ DOSSIER  │  CHAT          │  TOOLS   │
+ * │ (aside)  │  (main)        │  (aside) │
+ * │          ├────────────────┤          │
+ * │          │  > input       │          │
+ * └──────────┴────────────────┴──────────┘
+ *
+ * LAYOUT (MOBILE)
+ * ---------------
+ * Tab bar at top. One panel visible at a time.
+ * Chat is default. Command input pinned at bottom.
+ *
+ * CSS CLASSES FOR JS STATE
+ * ------------------------
+ *  .cotw-tabs__tab--active     Active mobile tab
+ *  .panel--hidden              Hide panel on mobile
+ *  .panel--visible             Show panel on mobile
+ *  .chat-message--user         User message bubble
+ *  .chat-message--claude       Claude response bubble
+ *  .chat-message--system       System status message
+ *  .chat-message--status       Connection status message
+ *  .chat-message--typing       Typewriter in progress
+ *  .connection--connected      Green status indicator
+ *  .connection--disconnected   Red status indicator
+ *  .connection--reconnecting   Amber status indicator
+ *
+ * ============================================================================
+ * Project: The Expanse v010
+ * Author: James (Project Manager)
+ * Date: February 13, 2026
+ * ============================================================================
+ */
+
+@layer components {
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Container — Four-Panel Grid                                        */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .cotw-container {
+        display: grid;
+        grid-template-columns: var(--panel-menu-inline-size) 1fr var(--panel-tools-inline-size);
+        grid-template-rows: 1fr;
+        gap: var(--panel-gap);
+        block-size: 100vh;
+        block-size: 100dvh;
+        padding: var(--panel-gap);
+        background: var(--color-bg-primary);
+        overflow: hidden;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Dossier Panel (Left)                                               */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .panel--dossier {
+        grid-column: 1;
+        grid-row: 1;
+        overflow-y: auto;
+        overflow-x: hidden;
+        scrollbar-width: thin;
+        scrollbar-color: var(--color-border-primary) transparent;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Dossier Sections                                                   */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .dossier-section {
+        padding: var(--space-md) var(--space-lg);
+        border-block-end: 1px solid var(--color-border-dim);
+    }
+
+    .dossier-section__title {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-xs);
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        margin: 0 0 var(--space-sm) 0;
+        font-weight: normal;
+    }
+
+    .dossier-field {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: var(--space-xs) 0;
+        font-family: var(--font-mono);
+        font-size: var(--font-size-sm);
+    }
+
+    .dossier-field__label {
+        color: var(--color-text-secondary);
+    }
+
+    .dossier-field__value {
+        color: var(--color-text-primary);
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Chat Message Variants                                              */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .chat-message--user {
+        color: var(--color-text-white);
+        padding: var(--space-sm) var(--space-lg);
+        margin-block: var(--space-xs);
+        border-left: 2px solid var(--color-text-white);
+    }
+
+    .chat-message--user::before {
+        content: '> ';
+        color: var(--color-text-muted);
+    }
+
+    .chat-message--claude {
+        color: var(--color-text-primary);
+        padding: var(--space-sm) var(--space-lg);
+        margin-block: var(--space-xs);
+        border-left: 2px solid var(--color-brand);
+    }
+
+    .chat-message--system {
+        color: var(--color-text-muted);
+        padding: var(--space-xs) var(--space-lg);
+        font-size: var(--font-size-xs);
+        font-style: italic;
+    }
+
+    .chat-message--status {
+        color: var(--color-accent-info);
+        padding: var(--space-xs) var(--space-lg);
+        font-size: var(--font-size-xs);
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+    }
+
+    .chat-message--typing {
+        opacity: 0.8;
+    }
+
+    .chat-message--typing::after {
+        content: '▊';
+        animation: blink-cursor var(--motion-duration-pulse) step-end infinite;
+    }
+
+    @keyframes blink-cursor {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0; }
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Connection Status Indicators                                       */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .connection--connected {
+        color: var(--color-accent-success);
+    }
+
+    .connection--disconnected {
+        color: var(--color-accent-error);
+    }
+
+    .connection--reconnecting {
+        color: var(--color-accent-warning);
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Mobile Tab Bar                                                     */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .cotw-tabs {
+        display: none;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Responsive — Mobile (single panel + tabs)                          */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    @media (max-inline-size: 768px) {
+        .cotw-container {
+            grid-template-columns: 1fr;
+            grid-template-rows: 1fr;
+            padding-block-start: 0;
+        }
+
+        .cotw-tabs {
+            display: flex;
+            background: var(--color-bg-panel);
+            border-block-end: 1px solid var(--color-border-primary);
+            padding: 0;
+            gap: 0;
+            position: sticky;
+            inset-block-start: 0;
+            z-index: 10;
+        }
+
+        .cotw-tabs__tab {
+            flex: 1;
+            font-family: var(--font-mono);
+            font-size: var(--font-size-sm);
+            color: var(--color-text-muted);
+            background: transparent;
+            border: none;
+            border-block-end: 2px solid transparent;
+            padding: var(--space-md) var(--space-sm);
+            cursor: pointer;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            transition: color var(--motion-duration-fast) var(--motion-easing-default),
+                        border-color var(--motion-duration-fast) var(--motion-easing-default);
+        }
+
+        .cotw-tabs__tab:hover {
+            color: var(--color-text-secondary);
+        }
+
+        .cotw-tabs__tab:focus-visible {
+            outline: 2px solid var(--color-brand);
+            outline-offset: -2px;
+        }
+
+        .cotw-tabs__tab--active {
+            color: var(--color-text-primary);
+            border-block-end-color: var(--color-brand);
+        }
+
+        .panel--dossier,
+        .panel--tools {
+            display: none;
+        }
+
+        .panel--terminal {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel--visible {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .panel--hidden {
+            display: none;
+        }
+
+        .terminal__input-area {
+            position: sticky;
+            inset-block-end: 0;
+            z-index: 5;
+        }
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Reduced Motion                                                     */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    @media (prefers-reduced-motion: reduce) {
+        .chat-message--typing::after {
+            animation: none;
+        }
+
+        .cotw-tabs__tab {
+            transition: none;
+        }
+    }
+}

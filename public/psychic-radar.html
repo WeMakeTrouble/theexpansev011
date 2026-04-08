@@ -1,0 +1,1365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#020805" />
+  <title>Psychic Radar — The Expanse v010</title>
+  <style>
+    /* ========================================================================
+     * PSYCHIC RADAR — The Expanse v010 (Combined Build r3)
+     * ========================================================================
+     * CRT-style radar visualisation of psychic proximity.
+     * Claude the Tanuki is always at center — he is the observer.
+     * All contacts are relative distance FROM Claude.
+     * No geographic data — The Expanse has no physical space.
+     * The sweep represents the engine scanning emotional states.
+     *
+     * Socket namespace: /ws/psychic-radar
+     * Expects: { type: 'contacts', contacts: [...], tick?: number }
+     * Contact: { id, name, distance (0-1), angle (degrees), intensity (0-1),
+     *            category, relationship, mood, pad: { p, a, d } }
+     *
+     * Design: Cold-war scientific instrument aesthetic
+     *
+     * r3 changes:
+     *   - requestIdleCallback for entity list builds (non-blocking sort)
+     *   - JSDoc type definitions for Blip and Contact
+     *   - Jitter added to reconnection backoff (thundering herd prevention)
+     *   - Defensive hexToRgbString (handles shorthand and malformed hex)
+     *   - Delta time comment clarifying visual-only compensation
+     * ======================================================================== */
+
+    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;500;600&family=Orbitron:wght@400;500;700&display=swap');
+
+    :root {
+      --crt-green: #00ff7f;
+      --crt-green-dim: rgba(0, 255, 127, 0.4);
+      --crt-green-faint: rgba(0, 255, 127, 0.15);
+
+      --rel-bound: #00ffff;
+      --rel-council: #7fff00;
+      --rel-protagonist: #ffd700;
+      --rel-ally: #00ff7f;
+      --rel-chaotic: #ff6600;
+      --rel-neutral: #888888;
+      --rel-hostile: #ff3333;
+      --rel-antagonist: #ff0066;
+
+      --pad-pleasure: #00ff7f;
+      --pad-arousal: #ffaa00;
+      --pad-dominance: #00ccff;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    body {
+      background: #000;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-family: 'IBM Plex Mono', 'SF Mono', 'Consolas', monospace;
+      color: var(--crt-green);
+      overflow-x: hidden;
+      overscroll-behavior: none;
+      padding: 12px;
+    }
+
+    /* ===== HEADER ===== */
+    .radar-header {
+      width: min(920px, 95vw);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 16px;
+      margin-bottom: 8px;
+      border: 1px solid rgba(0, 255, 127, 0.2);
+      border-radius: 4px;
+      background: rgba(5, 10, 8, 0.9);
+    }
+
+    .radar-title {
+      font-family: 'Orbitron', 'IBM Plex Mono', monospace;
+      font-size: 13px;
+      font-weight: 500;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--crt-green);
+      text-shadow: 0 0 8px rgba(0, 255, 127, 0.6);
+    }
+
+    .connection-status {
+      font-size: 11px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ff3333;
+      box-shadow: 0 0 6px #ff3333;
+      transition: all 0.3s ease;
+    }
+
+    .status-dot.online {
+      background: var(--crt-green);
+      box-shadow: 0 0 6px var(--crt-green);
+    }
+
+    .status-dot.reconnecting {
+      background: var(--pad-arousal);
+      box-shadow: 0 0 6px var(--pad-arousal);
+      animation: statusPulse 1s infinite;
+    }
+
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    /* ===== MAIN LAYOUT ===== */
+    .radar-layout {
+      display: flex;
+      gap: 12px;
+      width: min(920px, 95vw);
+      align-items: flex-start;
+    }
+
+    /* ===== RADAR CONTAINER ===== */
+    .crt-wrapper {
+      position: relative;
+      width: min(620px, 65vw);
+      aspect-ratio: 1 / 1;
+      background: #000;
+      padding: 12px;
+      box-shadow:
+        0 0 25px rgba(0, 0, 0, 0.9),
+        0 0 120px rgba(0, 0, 0, 1),
+        inset 0 0 100px rgba(0, 255, 127, 0.03);
+      border-radius: 50%;
+      overflow: hidden;
+      flex-shrink: 0;
+      will-change: transform;
+      transform: translateZ(0);
+    }
+
+    /* Scanlines */
+    .crt-wrapper::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.3) 0px,
+        rgba(0, 0, 0, 0.3) 1px,
+        transparent 1px,
+        transparent 2px
+      );
+      mix-blend-mode: multiply;
+      opacity: 0.5;
+      pointer-events: none;
+      z-index: 4;
+      animation: scanlineDrift 8s linear infinite;
+    }
+
+    @keyframes scanlineDrift {
+      0% { transform: translateY(0); }
+      100% { transform: translateY(4px); }
+    }
+
+    /* Phosphor glow */
+    .crt-wrapper::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: radial-gradient(circle at center, rgba(0, 255, 127, 0.18), transparent 60%);
+      opacity: 0.7;
+      mix-blend-mode: screen;
+      pointer-events: none;
+      z-index: 3;
+    }
+
+    .console {
+      width: 100%;
+      height: 100%;
+      background: radial-gradient(circle at 50% 30%, #102211 0, #050908 60%, #020403 100%);
+      border-radius: 50%;
+      border: 3px solid #1d2a22;
+      box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.9);
+      position: relative;
+      overflow: hidden;
+    }
+
+    #radarCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    /* Claude is always center — he is the observer, not a data point */
+    .center-marker {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 10px;
+      height: 10px;
+      background: var(--crt-green);
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+      box-shadow: 0 0 10px var(--crt-green), 0 0 25px rgba(0, 255, 127, 0.4), inset 0 0 3px #000;
+      z-index: 10;
+      pointer-events: none;
+    }
+
+    .claude-label {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -250%);
+      font-family: 'Orbitron', monospace;
+      font-size: 8px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      color: rgba(0, 255, 127, 0.6);
+      text-shadow: 0 0 6px rgba(0, 255, 127, 0.8);
+      pointer-events: none;
+      z-index: 10;
+    }
+
+    /* ===== SIDE PANEL ===== */
+    .side-panel {
+      flex: 1;
+      min-width: 220px;
+      max-width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .panel-section {
+      background: rgba(5, 10, 8, 0.92);
+      border: 1px solid rgba(0, 255, 127, 0.2);
+      border-radius: 4px;
+      padding: 10px 12px;
+    }
+
+    .panel-section h3 {
+      font-family: 'Orbitron', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      color: rgba(0, 255, 127, 0.7);
+      margin-bottom: 8px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid rgba(0, 255, 127, 0.15);
+    }
+
+    .readout-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11px;
+      padding: 2px 0;
+    }
+
+    .readout-label { color: rgba(0, 255, 127, 0.5); }
+
+    .readout-value {
+      color: var(--crt-green);
+      text-shadow: 0 0 4px rgba(0, 255, 127, 0.4);
+      font-weight: 500;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ===== PAD METERS ===== */
+    .pad-bar-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin: 3px 0;
+      font-size: 10px;
+    }
+
+    .pad-bar-label {
+      width: 14px;
+      color: rgba(0, 255, 127, 0.6);
+      font-weight: 600;
+    }
+
+    .pad-bar-track {
+      flex: 1;
+      height: 6px;
+      background: rgba(0, 255, 127, 0.08);
+      border-radius: 3px;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .pad-bar-fill {
+      position: absolute;
+      top: 0;
+      height: 100%;
+      border-radius: 3px;
+      transition: left 0.4s ease, width 0.4s ease;
+    }
+
+    .pad-bar-value {
+      width: 40px;
+      text-align: right;
+      color: var(--crt-green);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ===== ENTITY LIST ===== */
+    .entity-list {
+      max-height: 200px;
+      overflow-y: auto;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(0, 255, 127, 0.3) transparent;
+    }
+
+    .entity-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 0;
+      font-size: 10px;
+      cursor: pointer;
+      border-bottom: 1px solid rgba(0, 255, 127, 0.06);
+      transition: background 0.15s ease;
+    }
+
+    .entity-item:hover { background: rgba(0, 255, 127, 0.05); }
+    .entity-item.selected { background: rgba(0, 255, 127, 0.1); }
+
+    .entity-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .entity-name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: rgba(0, 255, 127, 0.8);
+    }
+
+    .entity-dist {
+      color: rgba(0, 255, 127, 0.5);
+      font-size: 9px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* ===== LEGEND ===== */
+    .legend-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px 8px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 9px;
+      color: rgba(0, 255, 127, 0.6);
+    }
+
+    .legend-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ===== BOTTOM BAR ===== */
+    .bottom-bar {
+      width: min(920px, 95vw);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 16px;
+      margin-top: 8px;
+      border: 1px solid rgba(0, 255, 127, 0.2);
+      border-radius: 4px;
+      background: rgba(5, 10, 8, 0.9);
+      font-size: 10px;
+      color: rgba(0, 255, 127, 0.5);
+    }
+
+    /* ===== RESPONSIVE ===== */
+    @media (max-width: 720px) {
+      .radar-layout {
+        flex-direction: column;
+        align-items: center;
+      }
+      .crt-wrapper { width: min(400px, 90vw); }
+      .side-panel {
+        width: 100%;
+        max-width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+      .panel-section { flex: 1; min-width: 200px; }
+    }
+
+    @media (max-width: 480px) {
+      .crt-wrapper { width: 92vw; }
+      .radar-header {
+        flex-direction: column;
+        gap: 4px;
+        text-align: center;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- HEADER -->
+  <div class="radar-header">
+    <div class="radar-title">Psychic Radar</div>
+    <div class="connection-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">OFFLINE</span>
+    </div>
+  </div>
+
+  <!-- MAIN LAYOUT -->
+  <div class="radar-layout">
+
+    <!-- RADAR -->
+    <div class="crt-wrapper">
+      <div class="console">
+        <canvas id="radarCanvas"></canvas>
+        <div class="center-marker"></div>
+        <div class="claude-label">CLAUDE</div>
+      </div>
+    </div>
+
+    <!-- SIDE PANEL -->
+    <div class="side-panel">
+
+      <!-- INSTRUMENTS -->
+      <div class="panel-section">
+        <h3>Instruments</h3>
+        <div class="readout-row">
+          <span class="readout-label">Scan Cycle</span>
+          <span class="readout-value" id="scanCycleValue">---</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-label">Contacts</span>
+          <span class="readout-value" id="contactCount">0</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-label">Engine Tick</span>
+          <span class="readout-value" id="tickValue">--</span>
+        </div>
+        <div class="readout-row">
+          <span class="readout-label">FPS</span>
+          <span class="readout-value" id="fpsValue">--</span>
+        </div>
+      </div>
+
+      <!-- SELECTED ENTITY PAD -->
+      <div class="panel-section">
+        <h3>PAD State</h3>
+        <div id="padEntityName" style="font-size: 11px; margin-bottom: 6px; color: var(--crt-green);">No selection</div>
+        <div>
+          <div class="pad-bar-row">
+            <span class="pad-bar-label">P</span>
+            <div class="pad-bar-track"><div class="pad-bar-fill" id="padP" style="left:50%;width:0;background:var(--pad-pleasure);"></div></div>
+            <span class="pad-bar-value" id="padPVal">0.00</span>
+          </div>
+          <div class="pad-bar-row">
+            <span class="pad-bar-label">A</span>
+            <div class="pad-bar-track"><div class="pad-bar-fill" id="padA" style="left:50%;width:0;background:var(--pad-arousal);"></div></div>
+            <span class="pad-bar-value" id="padAVal">0.00</span>
+          </div>
+          <div class="pad-bar-row">
+            <span class="pad-bar-label">D</span>
+            <div class="pad-bar-track"><div class="pad-bar-fill" id="padD" style="left:50%;width:0;background:var(--pad-dominance);"></div></div>
+            <span class="pad-bar-value" id="padDVal">0.00</span>
+          </div>
+        </div>
+        <div class="readout-row" id="relTypeRow" style="display:none;">
+          <span class="readout-label">Relationship</span>
+          <span class="readout-value" id="relTypeValue">--</span>
+        </div>
+        <div class="readout-row" id="catRow" style="display:none;">
+          <span class="readout-label">Category</span>
+          <span class="readout-value" id="catValue">--</span>
+        </div>
+      </div>
+
+      <!-- ENTITY LIST -->
+      <div class="panel-section">
+        <h3>Contacts</h3>
+        <div class="entity-list" id="entityList">
+          <div style="font-size:10px;color:rgba(0,255,127,0.4);padding:8px 0;">Awaiting data...</div>
+        </div>
+      </div>
+
+      <!-- LEGEND -->
+      <div class="panel-section">
+        <h3>Relationship Types</h3>
+        <div class="legend-grid">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--rel-bound);"></div>Bound</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--rel-council);"></div>Council</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--rel-protagonist);"></div>Protagonist</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--rel-ally);"></div>Ally</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--rel-chaotic);"></div>Chaotic</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--rel-neutral);"></div>Neutral</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--rel-hostile);"></div>Hostile</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--rel-antagonist);"></div>Antagonist</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- BOTTOM BAR -->
+  <div class="bottom-bar">
+    <span>The Expanse v010 — Psychic Engine</span>
+    <span id="lastUpdate">Last update: --</span>
+  </div>
+
+  <!-- ACCESSIBILITY -->
+  <div role="region" aria-label="Psychic proximity data" aria-live="polite" id="srData"
+       style="position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden;"></div>
+
+  <script>
+    /* ========================================================================
+     * PSYCHIC RADAR v010 — Combined Build r3
+     * ========================================================================
+     * Agnostic: draws ONLY data received from the server.
+     * Claude the Tanuki is always at center — permanent UI element.
+     * No geographic concepts — sweep = emotional scan cycle.
+     * No console.log. No hardcoded entity IDs. No mock data.
+     *
+     * r3 fixes applied from K2.5 review (91 -> 93+):
+     *   1. requestIdleCallback for non-blocking entity list builds
+     *   2. JSDoc type definitions for Blip and Contact
+     *   3. Jitter in reconnection backoff (thundering herd prevention)
+     *   4. Defensive hexToRgbString (handles shorthand and malformed hex)
+     *   5. Delta time clarified as visual-only compensation
+     *   6. PAD bar colours moved to CSS custom properties
+     * ======================================================================== */
+
+    /* ===== TYPE DEFINITIONS ===== */
+
+    /**
+     * @typedef {Object} ServerContact
+     * @property {string} id               - Unique entity identifier (hex ID from server)
+     * @property {string} [name]           - Display name
+     * @property {number} distance         - Psychic proximity 0-1 (0 = bound, 1 = hostile range)
+     * @property {number} angle            - Position on radar in degrees 0-360
+     * @property {number} [intensity]      - Signal strength 0-1 (default 0.5)
+     * @property {string} [category]       - Entity category (character, user, npc, etc.)
+     * @property {string} [relationship]   - One of: bound, council, protagonist, ally, chaotic, neutral, hostile, antagonist
+     * @property {string} [mood]           - Current mood descriptor
+     * @property {Object} [pad]            - PAD emotional coordinates
+     * @property {number} [pad.p]          - Pleasure: -1 to +1
+     * @property {number} [pad.a]          - Arousal: -1 to +1
+     * @property {number} [pad.d]          - Dominance: -1 to +1
+     */
+
+    /**
+     * @typedef {Object} Blip
+     * @property {string} id               - Entity identifier (from server)
+     * @property {number} r                - Computed pixel radius from center
+     * @property {number} distanceRaw      - Original 0-1 distance value
+     * @property {number} theta            - Angle in radians
+     * @property {number} intensity        - Clamped 0-1 signal strength
+     * @property {string} label            - Display label (name or truncated id)
+     * @property {number} lastSwept        - Timestamp when sweep last crossed this blip
+     * @property {number} pulsePhase       - Current phase of organic pulse animation
+     * @property {string|null} category    - Entity category
+     * @property {string|null} mood        - Mood descriptor
+     * @property {string} relationship     - Relationship type key
+     * @property {Object|null} pad         - PAD coordinates or null
+     */
+
+    /**
+     * @typedef {Object} ContactsPayload
+     * @property {string} type             - Must be 'contacts'
+     * @property {ServerContact[]} contacts - Array of contact data
+     * @property {number} [tick]           - Engine tick counter
+     */
+
+    /* ===== CONFIGURATION ===== */
+    var CONFIG = Object.freeze({
+      SWEEP_SPEED: 0.018,
+      SWEEP_TRAIL_ANGLE: 0.5,
+      RING_COUNT: 4,
+      DPR_MAX: 2,
+      FONT_FAMILY: '"IBM Plex Mono", "SF Mono", "Consolas", monospace',
+      LABEL_FONT_SIZE: 9,
+      RING_LABEL_FONT_SIZE: 8,
+      BLIP_GLOW_BASE: 18,
+      BLIP_GLOW_INTENSITY: 12,
+      BLIP_CORE_MIN: 2,
+      BLIP_CORE_MAX: 5,
+      MIN_LABEL_ALPHA: 0.25,
+      PULSE_SPEED: 0.003,
+      DELTA_MAX_MS: 100,
+      RECONNECT_BASE_MS: 1000,
+      RECONNECT_MAX_MS: 30000,
+      RECONNECT_MULTIPLIER: 1.5,
+      RECONNECT_JITTER: 0.5
+    });
+
+    var RING_LABELS = Object.freeze(['BOUND', 'ALLY', 'NEUTRAL', 'HOSTILE']);
+
+    /* ===== COLOUR SYSTEM — Single source of truth ===== */
+    /* REL_HEX is canonical. REL_RGB is derived from it. */
+    var REL_HEX = Object.freeze({
+      bound:       '#00ffff',
+      council:     '#7fff00',
+      protagonist: '#ffd700',
+      ally:        '#00ff7f',
+      chaotic:     '#ff6600',
+      neutral:     '#888888',
+      hostile:     '#ff3333',
+      antagonist:  '#ff0066'
+    });
+
+    /**
+     * Convert hex colour string to CSS rgb() component string.
+     * Handles #RGB shorthand, #RRGGBB, and malformed input.
+     * @param {string} hex - Colour in hex format
+     * @returns {string} - e.g. '0, 255, 127'
+     */
+    function hexToRgbString(hex) {
+      var clean = (hex || '').replace('#', '');
+      if (clean.length === 3) {
+        clean = clean.split('').map(function(c) { return c + c; }).join('');
+      }
+      var r = parseInt(clean.slice(0, 2), 16) || 0;
+      var g = parseInt(clean.slice(2, 4), 16) || 0;
+      var b = parseInt(clean.slice(4, 6), 16) || 0;
+      return r + ', ' + g + ', ' + b;
+    }
+
+    var REL_RGB = Object.freeze(
+      Object.keys(REL_HEX).reduce(function(acc, key) {
+        acc[key] = hexToRgbString(REL_HEX[key]);
+        return acc;
+      }, {})
+    );
+
+    /* ===== STATE ===== */
+    var canvas, ctx;
+    var w, h, cx, cy, radius;
+    var offCanvas, offCtx;
+    var offDirty = true;
+    var sweepAngle = 0;
+    var previousSweepAngle = 0;
+    var scanCycleCount = 0;
+    /** @type {Blip[]} */
+    var blips = [];
+    /** @type {string|null} */
+    var selectedBlipId = null;
+    var socket = null;
+    var reconnectAttempts = 0;
+    var reconnectTimer = null;
+    var animationId = null;
+    var lastFrameTime = 0;
+    var fpsFrames = 0;
+    var fpsLastTime = 0;
+    var entityListPending = null;
+
+    /* ===== DEBOUNCE ===== */
+    function debounce(fn, delay) {
+      var timer = null;
+      return function() {
+        var self = this;
+        var args = arguments;
+        clearTimeout(timer);
+        timer = setTimeout(function() { fn.apply(self, args); }, delay);
+      };
+    }
+
+    /* ===== requestIdleCallback POLYFILL ===== */
+    var scheduleIdle = window.requestIdleCallback || function(cb) {
+      return setTimeout(function() { cb({ timeRemaining: function() { return 50; } }); }, 1);
+    };
+    var cancelIdle = window.cancelIdleCallback || clearTimeout;
+
+    /* ===== CANVAS INIT ===== */
+    function initCanvas() {
+      canvas = document.getElementById('radarCanvas');
+      ctx = canvas.getContext('2d', { desynchronized: true });
+      fpsLastTime = performance.now();
+      lastFrameTime = performance.now();
+      resize();
+      window.addEventListener('resize', debounce(resize, 100));
+      canvas.addEventListener('click', handleCanvasClick);
+    }
+
+    function resize() {
+      var rect = canvas.parentElement.getBoundingClientRect();
+      var size = Math.min(rect.width, rect.height);
+      var dpr = Math.min(window.devicePixelRatio || 1, CONFIG.DPR_MAX);
+
+      canvas.width = Math.floor(size * dpr);
+      canvas.height = Math.floor(size * dpr);
+      canvas.style.width = size + 'px';
+      canvas.style.height = size + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      w = size;
+      h = size;
+      cx = w / 2;
+      cy = h / 2;
+      radius = size * 0.44;
+
+      /* Rebuild offscreen canvas for static elements */
+      offCanvas = document.createElement('canvas');
+      offCanvas.width = canvas.width;
+      offCanvas.height = canvas.height;
+      offCtx = offCanvas.getContext('2d');
+      offCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      offDirty = true;
+
+      /* Recompute blip pixel positions */
+      for (var i = 0; i < blips.length; i++) {
+        blips[i].r = blips[i].distanceRaw * radius;
+      }
+    }
+
+    /* ===== OFFSCREEN STATIC BACKGROUND ===== */
+    function renderStaticBackground() {
+      var oc = offCtx;
+
+      oc.fillStyle = '#000';
+      oc.fillRect(0, 0, w, h);
+
+      oc.save();
+      oc.translate(cx, cy);
+      oc.beginPath();
+      oc.arc(0, 0, radius, 0, Math.PI * 2);
+      oc.clip();
+
+      var grad = oc.createRadialGradient(0, 0, 0, 0, 0, radius);
+      grad.addColorStop(0, 'rgba(0, 40, 16, 1)');
+      grad.addColorStop(1, 'rgba(0, 6, 3, 1)');
+      oc.fillStyle = grad;
+      oc.fillRect(-radius, -radius, radius * 2, radius * 2);
+
+      /* Range rings */
+      for (var i = 1; i <= CONFIG.RING_COUNT; i++) {
+        var r = (radius / CONFIG.RING_COUNT) * i;
+        oc.beginPath();
+        oc.arc(0, 0, r, 0, Math.PI * 2);
+        oc.strokeStyle = 'rgba(0, 255, 127, ' + (0.08 + i * 0.02) + ')';
+        oc.lineWidth = 1;
+        oc.stroke();
+      }
+
+      /* Crosshairs */
+      oc.strokeStyle = 'rgba(0, 255, 127, 0.06)';
+      oc.lineWidth = 1;
+      oc.beginPath();
+      oc.moveTo(-radius, 0);
+      oc.lineTo(radius, 0);
+      oc.moveTo(0, -radius);
+      oc.lineTo(0, radius);
+      oc.stroke();
+
+      /* Ring labels */
+      oc.font = CONFIG.RING_LABEL_FONT_SIZE + 'px ' + CONFIG.FONT_FAMILY;
+      oc.textAlign = 'left';
+      for (var j = 0; j < RING_LABELS.length; j++) {
+        var rr = (radius / CONFIG.RING_COUNT) * (j + 1);
+        oc.fillStyle = 'rgba(0, 255, 127, 0.18)';
+        oc.fillText(RING_LABELS[j], 4, -rr + 10);
+      }
+
+      oc.restore();
+      offDirty = false;
+    }
+
+    /* ===== ANGLE UTILITIES ===== */
+    function normalizeAngle(a) {
+      while (a < 0) a += Math.PI * 2;
+      while (a >= Math.PI * 2) a -= Math.PI * 2;
+      return a;
+    }
+
+    function angleBetween(prev, curr, target) {
+      var p = normalizeAngle(prev);
+      var c = normalizeAngle(curr);
+      var t = normalizeAngle(target);
+      if (p <= c) return t >= p && t <= c;
+      return t >= p || t <= c;
+    }
+
+    /* ===== DRAWING — FRAME ===== */
+    function drawFrame(now, delta) {
+      /* Static background from offscreen canvas */
+      if (offDirty) renderStaticBackground();
+      ctx.drawImage(offCanvas, 0, 0, canvas.width, canvas.height, 0, 0, w, h);
+
+      drawBlips(now);
+      drawSweep(now, delta);
+    }
+
+    /* ===== DRAWING — SWEEP ===== */
+    function drawSweep(now, delta) {
+      previousSweepAngle = sweepAngle;
+
+      /*
+       * Visual-only delta compensation: scales sweep speed to maintain
+       * consistent visual rotation regardless of frame rate. Uses 60fps
+       * (16.667ms) as the reference baseline. This is NOT physics simulation —
+       * actual emotional contagion / psychic proximity calculations are
+       * deterministic on the server. Clamped at DELTA_MAX_MS to prevent
+       * large jumps when resuming from background tab.
+       */
+      var sweepStep = CONFIG.SWEEP_SPEED * (delta / 16.667);
+      sweepAngle += sweepStep;
+
+      if (sweepAngle >= Math.PI * 2) {
+        sweepAngle -= Math.PI * 2;
+        scanCycleCount++;
+        document.getElementById('scanCycleValue').textContent = scanCycleCount;
+        if (socket && socket.connected) socket.emit('request-update');
+      }
+
+      /* Detect blips crossed by sweep */
+      for (var i = 0; i < blips.length; i++) {
+        var b = blips[i];
+        if (b.r <= 0) continue;
+        if (angleBetween(previousSweepAngle, sweepAngle, b.theta)) {
+          b.lastSwept = now;
+        }
+      }
+
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(sweepAngle);
+
+      /* Sweep trail */
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, radius, -CONFIG.SWEEP_TRAIL_ANGLE, 0);
+      ctx.closePath();
+
+      var tg = ctx.createLinearGradient(0, 0, radius, 0);
+      tg.addColorStop(0, 'rgba(0, 255, 127, 0.35)');
+      tg.addColorStop(0.5, 'rgba(0, 255, 127, 0.12)');
+      tg.addColorStop(1, 'rgba(0, 255, 127, 0.03)');
+      ctx.fillStyle = tg;
+      ctx.fill();
+
+      /* Sweep line */
+      var lg = ctx.createLinearGradient(0, 0, radius, 0);
+      lg.addColorStop(0, 'rgba(0, 255, 127, 0.85)');
+      lg.addColorStop(0.5, 'rgba(0, 255, 127, 0.35)');
+      lg.addColorStop(1, 'rgba(0, 255, 127, 0.08)');
+      ctx.strokeStyle = lg;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(radius, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    /* ===== DRAWING — BLIPS ===== */
+    function drawBlips(now) {
+      var sweepPeriodMs = ((Math.PI * 2) / CONFIG.SWEEP_SPEED / 60) * 1000;
+
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      for (var i = 0; i < blips.length; i++) {
+        var b = blips[i];
+        var x = Math.cos(b.theta) * b.r;
+        var y = Math.sin(b.theta) * b.r;
+
+        /* Decay alpha */
+        var alpha;
+        if (b.r <= 0) {
+          alpha = 1.0;
+        } else {
+          var timeSince = now - b.lastSwept;
+          var decay = Math.min(timeSince / sweepPeriodMs, 1);
+          var base = 0.4 + (b.intensity * 0.6);
+          alpha = base * (1 - (decay * 0.92));
+          alpha = Math.max(alpha, 0.04);
+        }
+
+        var rgb = REL_RGB[b.relationship] || REL_RGB.neutral;
+        var isSel = (b.id === selectedBlipId);
+
+        /* Organic pulse */
+        b.pulsePhase += CONFIG.PULSE_SPEED;
+        var pulseScale = 1 + Math.sin(b.pulsePhase) * 0.08;
+
+        /* Glow */
+        var glowSize = (CONFIG.BLIP_GLOW_BASE + (alpha * CONFIG.BLIP_GLOW_INTENSITY)) * pulseScale;
+        var ga = isSel ? Math.min(alpha * 1.5, 1) : alpha;
+
+        var g = ctx.createRadialGradient(x, y, 0, x, y, glowSize);
+        g.addColorStop(0, 'rgba(' + rgb + ', ' + ga + ')');
+        g.addColorStop(0.5, 'rgba(' + rgb + ', ' + (ga * 0.3) + ')');
+        g.addColorStop(1, 'rgba(' + rgb + ', 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(x, y, glowSize, 0, Math.PI * 2);
+        ctx.fill();
+
+        /* Core dot */
+        var cs = CONFIG.BLIP_CORE_MIN + (alpha * (CONFIG.BLIP_CORE_MAX - CONFIG.BLIP_CORE_MIN));
+        ctx.fillStyle = 'rgba(' + rgb + ', ' + Math.min(alpha * 1.5, 1) + ')';
+        ctx.beginPath();
+        ctx.arc(x, y, cs, 0, Math.PI * 2);
+        ctx.fill();
+
+        /* Selection ring */
+        if (isSel) {
+          ctx.strokeStyle = 'rgba(' + rgb + ', ' + (0.5 + Math.sin(now / 300) * 0.3) + ')';
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(x, y, glowSize + 4, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        /* Label */
+        if (b.r > 5 && alpha > CONFIG.MIN_LABEL_ALPHA) {
+          ctx.fillStyle = 'rgba(' + rgb + ', ' + alpha + ')';
+          ctx.font = CONFIG.LABEL_FONT_SIZE + 'px ' + CONFIG.FONT_FAMILY;
+          ctx.textAlign = 'center';
+          ctx.fillText(b.label, x, y + glowSize + 10);
+        }
+      }
+
+      ctx.restore();
+    }
+
+    /* ===== FPS ===== */
+    function updateFps(now) {
+      fpsFrames++;
+      if (now - fpsLastTime >= 1000) {
+        document.getElementById('fpsValue').textContent = fpsFrames;
+        fpsFrames = 0;
+        fpsLastTime = now;
+      }
+    }
+
+    /* ===== RENDER LOOP — with delta time clamping ===== */
+    function loop() {
+      var now = performance.now();
+      var delta = Math.min(now - lastFrameTime, CONFIG.DELTA_MAX_MS);
+      drawFrame(now, delta);
+      updateFps(now);
+      lastFrameTime = now;
+      animationId = requestAnimationFrame(loop);
+    }
+
+    function pauseLoop() {
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+      }
+    }
+
+    function resumeLoop() {
+      if (!animationId) {
+        lastFrameTime = performance.now();
+        fpsLastTime = performance.now();
+        loop();
+      }
+    }
+
+    /* ===== VISIBILITY API — pause when tab hidden ===== */
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) {
+        pauseLoop();
+      } else {
+        resumeLoop();
+      }
+    });
+
+    /* ===== CLICK HANDLING ===== */
+    function handleCanvasClick(e) {
+      var rect = canvas.getBoundingClientRect();
+      var mx = e.clientX - rect.left - cx;
+      var my = e.clientY - rect.top - cy;
+
+      var closest = null;
+      var closestDist = Infinity;
+
+      for (var i = 0; i < blips.length; i++) {
+        var b = blips[i];
+        var bx = Math.cos(b.theta) * b.r;
+        var by = Math.sin(b.theta) * b.r;
+        var d = Math.sqrt((mx - bx) * (mx - bx) + (my - by) * (my - by));
+        if (d < 30 && d < closestDist) {
+          closest = b;
+          closestDist = d;
+        }
+      }
+
+      if (closest) {
+        selectEntity(closest.id);
+      } else {
+        deselectEntity();
+      }
+    }
+
+    function selectEntity(id) {
+      selectedBlipId = id;
+      var b = null;
+      for (var i = 0; i < blips.length; i++) {
+        if (blips[i].id === id) { b = blips[i]; break; }
+      }
+      if (!b) return;
+
+      document.getElementById('padEntityName').textContent = b.label + ' (' + b.id + ')';
+
+      /* PAD bars — colours via CSS custom properties */
+      if (b.pad) {
+        updatePadBar('padP', 'padPVal', b.pad.p || 0);
+        updatePadBar('padA', 'padAVal', b.pad.a || 0);
+        updatePadBar('padD', 'padDVal', b.pad.d || 0);
+      } else {
+        updatePadBar('padP', 'padPVal', 0);
+        updatePadBar('padA', 'padAVal', 0);
+        updatePadBar('padD', 'padDVal', 0);
+      }
+
+      /* Relationship */
+      var relRow = document.getElementById('relTypeRow');
+      var relVal = document.getElementById('relTypeValue');
+      if (b.relationship) {
+        relRow.style.display = 'flex';
+        relVal.textContent = b.relationship;
+        relVal.style.color = REL_HEX[b.relationship] || 'var(--crt-green)';
+      } else {
+        relRow.style.display = 'none';
+      }
+
+      /* Category */
+      var catRow = document.getElementById('catRow');
+      var catVal = document.getElementById('catValue');
+      if (b.category) {
+        catRow.style.display = 'flex';
+        catVal.textContent = b.category;
+      } else {
+        catRow.style.display = 'none';
+      }
+
+      updateEntityListSelection(id);
+    }
+
+    function deselectEntity() {
+      selectedBlipId = null;
+      document.getElementById('padEntityName').textContent = 'No selection';
+      updatePadBar('padP', 'padPVal', 0);
+      updatePadBar('padA', 'padAVal', 0);
+      updatePadBar('padD', 'padDVal', 0);
+      document.getElementById('relTypeRow').style.display = 'none';
+      document.getElementById('catRow').style.display = 'none';
+      updateEntityListSelection(null);
+    }
+
+    /**
+     * Update a PAD bar element. Colour is set via CSS custom property on the
+     * element's inline style in HTML, so we do not override it here.
+     * @param {string} barId  - DOM id of the .pad-bar-fill element
+     * @param {string} valId  - DOM id of the .pad-bar-value span
+     * @param {number} value  - PAD value from -1 to +1
+     */
+    function updatePadBar(barId, valId, value) {
+      var bar = document.getElementById(barId);
+      var valEl = document.getElementById(valId);
+      var clamped = Math.max(-1, Math.min(1, value));
+      var pct = Math.abs(clamped) * 50;
+      var leftPos = clamped >= 0 ? 50 : 50 - pct;
+      bar.style.left = leftPos + '%';
+      bar.style.width = pct + '%';
+      valEl.textContent = clamped >= 0 ? '+' + clamped.toFixed(2) : clamped.toFixed(2);
+    }
+
+    /* ===== ENTITY LIST — event delegation, non-blocking builds ===== */
+    function initEntityList() {
+      document.getElementById('entityList').addEventListener('click', function(e) {
+        var item = e.target.closest('.entity-item');
+        if (!item) return;
+        var id = item.getAttribute('data-id');
+        if (id) selectEntity(id);
+      });
+    }
+
+    /**
+     * Schedule entity list rebuild via requestIdleCallback so sorting and
+     * DOM mutation do not block the render loop when contact count is high.
+     */
+    function buildEntityList() {
+      if (entityListPending) {
+        cancelIdle(entityListPending);
+      }
+      entityListPending = scheduleIdle(function() {
+        entityListPending = null;
+        _renderEntityList();
+      });
+    }
+
+    /** @private Actual DOM render for entity list. Called via idle callback. */
+    function _renderEntityList() {
+      var container = document.getElementById('entityList');
+      if (blips.length === 0) {
+        container.innerHTML = '<div style="font-size:10px;color:rgba(0,255,127,0.4);padding:8px 0;">Awaiting data...</div>';
+        return;
+      }
+
+      var sorted = blips.slice().sort(function(a, b) { return a.distanceRaw - b.distanceRaw; });
+      var html = '';
+      for (var i = 0; i < sorted.length; i++) {
+        var b = sorted[i];
+        var col = REL_HEX[b.relationship] || '#888';
+        var sel = b.id === selectedBlipId ? ' selected' : '';
+        html += '<div class="entity-item' + sel + '" data-id="' + b.id + '">';
+        html += '<div class="entity-dot" style="background:' + col + ';box-shadow:0 0 4px ' + col + ';"></div>';
+        html += '<span class="entity-name">' + (b.label || b.id) + '</span>';
+        html += '<span class="entity-dist">' + (b.distanceRaw !== undefined ? b.distanceRaw.toFixed(2) : '--') + '</span>';
+        html += '</div>';
+      }
+      container.innerHTML = html;
+
+      /* Screen reader */
+      updateScreenReaderData(sorted);
+    }
+
+    function updateEntityListSelection(id) {
+      var items = document.querySelectorAll('.entity-item');
+      for (var i = 0; i < items.length; i++) {
+        if (items[i].getAttribute('data-id') === id) {
+          items[i].classList.add('selected');
+        } else {
+          items[i].classList.remove('selected');
+        }
+      }
+    }
+
+    function updateScreenReaderData(sorted) {
+      var sr = document.getElementById('srData');
+      var text = 'Psychic radar: ' + sorted.length + ' contacts. ';
+      for (var i = 0; i < Math.min(sorted.length, 10); i++) {
+        var b = sorted[i];
+        text += b.label + ', distance ' + (b.distanceRaw || 0).toFixed(2);
+        if (b.relationship) text += ', ' + b.relationship;
+        text += '. ';
+      }
+      sr.textContent = text;
+    }
+
+    /* ===== DATA VALIDATION ===== */
+
+    /**
+     * Validate a single contact object from the server.
+     * @param {*} c - Raw contact data
+     * @returns {boolean} true if valid
+     */
+    function validateContact(c) {
+      if (!c || typeof c !== 'object') return false;
+      if (typeof c.id !== 'string' || c.id.length === 0) return false;
+      if (typeof c.distance !== 'number' || isNaN(c.distance)) return false;
+      if (typeof c.angle !== 'number' || isNaN(c.angle)) return false;
+      if (c.distance < 0 || c.distance > 1) return false;
+      return true;
+    }
+
+    /**
+     * Validate the contacts payload envelope.
+     * @param {*} data - Raw socket message
+     * @returns {boolean} true if valid
+     */
+    function validateContactsPayload(data) {
+      if (!data || typeof data !== 'object') return false;
+      if (data.type !== 'contacts') return false;
+      if (!Array.isArray(data.contacts)) return false;
+      return true;
+    }
+
+    /* ===== WEBSOCKET ===== */
+    function getSocketUrl() {
+      var host = window.location.host || 'localhost:3000';
+      return window.location.protocol + '//' + host;
+    }
+
+    function connectSocket() {
+      if (typeof io === 'undefined') {
+        setStatus('NO SOCKET.IO', 'offline');
+        return;
+      }
+
+      var url = getSocketUrl();
+      socket = io(url + '/ws/psychic-radar', {
+        reconnection: false,
+        transports: ['websocket', 'polling']
+      });
+
+      socket.on('connect', function() {
+        reconnectAttempts = 0;
+        setStatus('ONLINE', 'online');
+      });
+
+      socket.on('contacts', function(data) {
+        if (!validateContactsPayload(data)) return;
+
+        var now = performance.now();
+        /** @type {Blip[]} */
+        var newBlips = [];
+
+        for (var i = 0; i < data.contacts.length; i++) {
+          var c = data.contacts[i];
+          if (!validateContact(c)) continue;
+
+          /* Preserve lastSwept and pulsePhase from existing blip if present */
+          var existing = null;
+          for (var j = 0; j < blips.length; j++) {
+            if (blips[j].id === c.id) { existing = blips[j]; break; }
+          }
+
+          newBlips.push({
+            id: c.id,
+            r: c.distance * radius,
+            distanceRaw: c.distance,
+            theta: (c.angle * Math.PI) / 180,
+            intensity: typeof c.intensity === 'number' ? Math.max(0, Math.min(1, c.intensity)) : 0.5,
+            label: c.name || c.id.slice(0, 7),
+            lastSwept: existing ? existing.lastSwept : (now - 1000),
+            pulsePhase: existing ? existing.pulsePhase : (Math.random() * Math.PI * 2),
+            category: c.category || null,
+            mood: c.mood || null,
+            relationship: c.relationship || 'neutral',
+            pad: c.pad || null
+          });
+        }
+
+        blips = newBlips;
+        document.getElementById('contactCount').textContent = blips.length;
+        document.getElementById('lastUpdate').textContent = 'Last update: ' + new Date().toLocaleTimeString();
+
+        if (data.tick !== undefined) {
+          document.getElementById('tickValue').textContent = data.tick;
+        }
+
+        buildEntityList();
+
+        /* Re-select if entity still exists */
+        if (selectedBlipId) {
+          var still = null;
+          for (var k = 0; k < blips.length; k++) {
+            if (blips[k].id === selectedBlipId) { still = blips[k]; break; }
+          }
+          if (still) {
+            selectEntity(selectedBlipId);
+          } else {
+            deselectEntity();
+          }
+        }
+      });
+
+      socket.on('disconnect', function() {
+        setStatus('DISCONNECTED', 'offline');
+        scheduleReconnect();
+      });
+
+      socket.on('connect_error', function() {
+        setStatus('ERROR', 'offline');
+        scheduleReconnect();
+      });
+    }
+
+    /**
+     * Schedule reconnection with exponential backoff AND jitter.
+     * Jitter prevents thundering herd: all clients reconnecting at the
+     * exact same moment after a server restart.
+     * Formula: delay * (JITTER + Math.random() * (1 - JITTER))
+     * With JITTER=0.5: actual delay is 50%-100% of computed delay.
+     */
+    function scheduleReconnect() {
+      if (reconnectTimer) return;
+      reconnectAttempts++;
+      var baseDelay = Math.min(
+        CONFIG.RECONNECT_BASE_MS * Math.pow(CONFIG.RECONNECT_MULTIPLIER, reconnectAttempts - 1),
+        CONFIG.RECONNECT_MAX_MS
+      );
+      var jitteredDelay = baseDelay * (CONFIG.RECONNECT_JITTER + Math.random() * (1 - CONFIG.RECONNECT_JITTER));
+
+      setStatus('RECONNECTING (' + Math.round(jitteredDelay / 1000) + 's)', 'reconnecting');
+      reconnectTimer = setTimeout(function() {
+        reconnectTimer = null;
+        if (socket) {
+          socket.close();
+          socket = null;
+        }
+        connectSocket();
+      }, jitteredDelay);
+    }
+
+    function setStatus(text, state) {
+      document.getElementById('statusText').textContent = text;
+      var dot = document.getElementById('statusDot');
+      dot.className = 'status-dot';
+      if (state === 'online') dot.classList.add('online');
+      if (state === 'reconnecting') dot.classList.add('reconnecting');
+    }
+
+    /* ===== SOCKET.IO LOADER ===== */
+    function loadSocketIO(callback) {
+      var script = document.createElement('script');
+      script.src = '/socket.io/socket.io.js';
+      script.onload = callback;
+      script.onerror = function() {
+        var cdn = document.createElement('script');
+        cdn.src = 'https://cdn.socket.io/4.7.5/socket.io.min.js';
+        cdn.onload = callback;
+        cdn.onerror = function() {
+          setStatus('NO SOCKET.IO', 'offline');
+        };
+        document.head.appendChild(cdn);
+      };
+      document.head.appendChild(script);
+    }
+
+    /* ===== CLEANUP ===== */
+    window.addEventListener('beforeunload', function() {
+      pauseLoop();
+      if (entityListPending) cancelIdle(entityListPending);
+      if (socket) socket.close();
+    });
+
+    /* ===== INIT ===== */
+    initCanvas();
+    initEntityList();
+    loop();
+    loadSocketIO(function() {
+      connectSocket();
+    });
+  </script>
+</body>
+</html>

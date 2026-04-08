@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<!--
+ ============================================================================
+ The Expanse v010 — Council of the Wise Terminal
+ File: public/cotw/cotw-dossier.html
+ ============================================================================
+
+ WHAT THIS FILE IS:
+ ---------------------------------------------------------------------------
+ Five-zone dynamic grid user terminal for The Expanse chat experience.
+ Claude the Tanuki guides users through the interactive narrative universe.
+ All interaction flows through the terminal — Claude IS the interface.
+
+ LAYOUT GRID:
+ ---------------------------------------------------------------------------
+ .cms-container (CSS Grid: auto 1fr auto columns, auto 1fr auto rows)
+
+   Col 1 (auto):   nav.panel--menu       Sidebar menu, clamp(200px, 20vw, 300px)
+   Col 2 (1fr):    Top bar / Terminal / Bottom bar
+   Col 3 (auto):   aside.panel--content  Content display, clamp(200px, 20vw, 300px)
+
+   Hiding any panel causes the grid to auto-redistribute space.
+   Terminal NEVER hides. Toggle buttons in terminal header control all panels.
+
+ MOBILE:
+ ---------------------------------------------------------------------------
+ Tabbed single panel. Chat is primary. Swipe/tap to switch between
+ Chat, Menu, Content. Command input pinned at bottom.
+
+ ARCHITECTURE:
+ ---------------------------------------------------------------------------
+ - Vanilla JavaScript, no frameworks
+ - Terminal aesthetic (CRT green on black, cold-war instrument design)
+ - CSS Grid five-zone layout with mobile responsive collapse
+ - Socket.io for real-time Claude communication via /terminal namespace
+ - Auth guard: checks /auth/check on load, redirects if not authenticated
+ - ARIA landmarks via semantic HTML elements
+ - Content Security Policy enforced via meta tag (hardened)
+ - Progressive enhancement: noscript fallback provided
+ - Reuses cms-styles.css grid system (shared design tokens)
+ - ZERO external dependencies — all libraries served locally
+
+ PANELS:
+ ---------------------------------------------------------------------------
+ LEFT (nav.panel--menu):      COTW drill-down menu (8 sections)
+ TOP (panel--top):            Quick dossier summary (username, belt, PAD)
+ CENTER (main.panel--terminal): Claude terminal (chat + command input)
+ BOTTOM (panel--bottom):      Reserved for future use
+ RIGHT (aside.panel--content): Content display (data views, instruments)
+
+ MESSAGE FLOW:
+ ---------------------------------------------------------------------------
+ 1. Page load -> auth check -> redirect to login if unauthenticated
+ 2. Socket connects to /terminal namespace with credentials
+ 3. Server fires ConciergeStatusReportService (login greeting)
+ 4. User types command -> emit 'terminal-command'
+ 5. EarWig interprets input (PAD, learning, repair, cognitive frame)
+ 6. 7-phase pipeline processes response
+ 7. Server emits 'command-response' -> typewriter renders in chat
+
+ DEPENDENCIES:
+ ---------------------------------------------------------------------------
+ - /cms/css/cms-styles.css       Shared terminal aesthetic + grid system
+ - /shared/css/psychic-radar.css Psychic Radar instrument styles
+ - /cms/css/ockhamsRazorView.css Ockham Razor instrument styles
+ - css/cotw-styles.css           COTW-specific panel and chat styles
+ - /cms/js/vendor/socket.io.min.js  Socket.io client (local vendor copy)
+ - js/cotwMenu.js                Drill-down menu navigation
+ - js/cotwBootstrap.js           Module initialisation
+ - js/terminalSocketHandler.js   Socket.io handler (auth, chat, typewriter)
+ - js/cotwPanelToggle.js         Panel toggle controls
+
+ SECURITY:
+ ---------------------------------------------------------------------------
+ - CSP: default-src 'self' only — no external sources
+ - Referrer-Policy: strict-origin-when-cross-origin
+ - No inline scripts or styles
+ - Auth guard on page load
+
+ RELATED FILES:
+ ---------------------------------------------------------------------------
+ - public/cotw/cotw-login.html            Login page (redirects here)
+ - public/psychic-radar.html              Psychic radar standalone
+ - backend/councilTerminal/socketHandler.js  Server-side socket handler
+ - backend/councilTerminal/ClaudeBrain.js    Command processing pipeline
+
+ ============================================================================
+ Project: The Expanse v010
+ Author: James (Project Manager)
+ Created: February 13, 2026
+ Updated: March 8, 2026 — Five-zone grid layout, menu system, modular JS
+ ============================================================================
+-->
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self' 'unsafe-inline';
+        connect-src 'self' ws: wss:;
+        img-src 'self' data: blob:;
+        font-src 'self';
+        media-src 'self' blob: data:;
+        object-src 'none';
+        base-uri 'self';
+        frame-ancestors 'none';
+        form-action 'self';
+    ">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="The Expanse v010 — Council of the Wise Terminal">
+
+    <title>The Expanse — COTW Terminal v010</title>
+
+    <link rel="preload" href="/cms/css/cms-styles.css" as="style">
+    <link rel="preload" href="css/cotw-styles.css" as="style">
+    <link rel="modulepreload" href="js/cotwMenu.js">
+    <link rel="modulepreload" href="js/cotwBootstrap.js">
+    <link rel="modulepreload" href="js/terminalSocketHandler.js">
+
+    <link rel="stylesheet" href="/shared/css/psychic-radar.css">
+    <link rel="stylesheet" href="/cms/css/cms-styles.css">
+    <link rel="stylesheet" href="/cms/css/ockhamsRazorView.css">
+    <link rel="stylesheet" href="/cms/css/wwddGunsightView.css">
+    <link rel="stylesheet" href="css/cotw-styles.css">
+</head>
+<body>
+    <a href="#command-input" class="sr-only" id="skip-link">Skip to command input</a>
+
+    <noscript>
+        <div class="noscript-fallback">
+            <p>The Expanse Terminal requires JavaScript to operate.</p>
+            <p>Please enable JavaScript and reload the page.</p>
+        </div>
+    </noscript>
+
+    <!-- Mobile tab bar (visible only on small screens) -->
+    <nav class="cotw-tabs" aria-label="Panel navigation" data-testid="panel-tabs">
+        <button
+            class="cotw-tabs__tab"
+            data-panel="menu"
+            data-testid="tab-menu"
+            aria-selected="false"
+            role="tab"
+        >Menu</button>
+        <button
+            class="cotw-tabs__tab cotw-tabs__tab--active"
+            data-panel="terminal"
+            data-testid="tab-chat"
+            aria-selected="true"
+            role="tab"
+        >Chat</button>
+        <button
+            class="cotw-tabs__tab"
+            data-panel="content"
+            data-testid="tab-content"
+            aria-selected="false"
+            role="tab"
+        >Content</button>
+    </nav>
+
+    <div class="cms-container">
+
+        <!-- LEFT PANEL — COTW Menu (col 1, spans all rows) -->
+        <nav class="panel panel--menu" aria-label="COTW navigation">
+            <header class="panel__header">
+                <span class="panel__title">COTW</span>
+                <span class="panel__status">v010</span>
+            </header>
+            <div class="panel__body" id="cotw-menu">
+                <div class="loading" aria-busy="true">Initialising...</div>
+            </div>
+        </nav>
+
+        <!-- TOP BAR — Instruments (col 2, row 1) -->
+        <div class="panel panel--top" id="panel-top" aria-label="Instruments" hidden>
+            <div class="panel__body" id="top-bar-display">
+            </div>
+        </div>
+
+        <!-- CENTRE PANEL — Claude Terminal (col 2, row 2) -->
+        <main class="panel panel--terminal" aria-label="Claude terminal" data-testid="panel-terminal">
+            <header class="terminal-header">
+                <div class="terminal-header__toggles-left">
+                    <button
+                        class="toggle-btn toggle-btn--active"
+                        data-target="panel--menu"
+                        aria-label="Toggle COTW menu"
+                        aria-expanded="true"
+                        title="Menu"
+                    >&#9776;</button>
+                    <button
+                        class="toggle-btn toggle-btn--active"
+                        data-target="panel-top"
+                        aria-label="Toggle dossier bar"
+                        aria-expanded="true"
+                        title="Dossier bar"
+                    >&#9650;</button>
+                </div>
+                <span class="terminal-header__title">Claude Terminal</span>
+                <span class="terminal-header__status" id="connection-status" role="status" data-testid="connection-status">Disconnected</span>
+                <div class="terminal-header__toggles-right">
+                    <button
+                        class="toggle-btn"
+                        data-target="panel-bottom"
+                        aria-label="Toggle bottom bar"
+                        aria-expanded="false"
+                        title="Bottom bar"
+                    >&#9660;</button>
+                    <button
+                        class="toggle-btn toggle-btn--active"
+                        data-target="panel--content"
+                        aria-label="Toggle content panel"
+                        aria-expanded="true"
+                        title="Content"
+                    >&#9776;</button>
+                </div>
+            </header>
+            <div
+                class="terminal__chat"
+                id="chat-output"
+                role="log"
+                aria-live="polite"
+                aria-atomic="false"
+                aria-relevant="additions"
+                aria-label="Chat history"
+                data-testid="chat-output"
+            >
+            </div>
+            <div class="terminal__input-area">
+                <span class="terminal__prompt" aria-hidden="true">&gt;</span>
+                <label for="command-input" class="sr-only">Enter command</label>
+                <input
+                    type="text"
+                    id="command-input"
+                    class="terminal__command"
+                    placeholder="Type a command..."
+                    autocomplete="off"
+                    spellcheck="false"
+                    autofocus
+                    aria-describedby="input-hint"
+                    aria-controls="chat-output"
+                    data-testid="command-input"
+                >
+                <div id="input-hint" class="sr-only">
+                    Command input focused. Type a message and press Enter to send to Claude.
+                    Press Tab to navigate to other panels.
+                </div>
+            </div>
+        </main>
+
+        <!-- BOTTOM BAR — Reserved (col 2, row 3) -->
+        <div class="panel panel--bottom" id="panel-bottom" aria-label="System info bar" hidden>
+            <div class="panel__body">
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL — Content Display (col 3, spans all rows) -->
+        <aside class="panel panel--content" aria-label="Content display">
+            <header class="panel__header">
+                <span class="panel__title">Content</span>
+                <span class="panel__status" id="content-status">Idle</span>
+            </header>
+            <div class="panel__body" id="content-display" data-testid="content-display">
+                <div class="content-placeholder">
+                    <div class="content-placeholder__icon" aria-hidden="true">&#x25C9;</div>
+                    <div class="content-placeholder__text">
+                        Select an item from the menu<br>to view your dossier data,<br>instruments, and journey here.
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <!-- Hidden belt status (used by terminalSocketHandler) -->
+    <!-- Hidden dossier fields for terminalSocketHandler.js -->
+    <span id="user-belt" class="sr-only" role="status" data-testid="user-belt"></span>
+    <span id="dossier-username" class="sr-only" data-testid="dossier-username"></span>
+    <span id="dossier-access" class="sr-only" data-testid="dossier-access"></span>
+    <span id="dossier-belt" class="sr-only" data-testid="dossier-belt"></span>
+    <span id="dossier-pad-p" class="sr-only" data-testid="dossier-pad-p">0.00</span>
+    <span id="dossier-pad-a" class="sr-only" data-testid="dossier-pad-a">0.00</span>
+    <span id="dossier-pad-d" class="sr-only" data-testid="dossier-pad-d">0.00</span>
+    <span id="dossier-turn" class="sr-only" data-testid="dossier-turn">0</span>
+    <span id="dossier-status" class="sr-only" data-testid="dossier-status">Offline</span>
+
+    <!-- Toast notification container -->
+    <div class="toast-container" id="toast-container" role="alert" aria-live="assertive" data-testid="toast-container"></div>
+
+    <!-- Socket.io client (local vendor copy) -->
+    <script src="/cms/js/vendor/socket.io.min.js"></script>
+
+    <!-- COTW modules -->
+    <script type="module" src="js/cotwMenu.js" fetchpriority="high"></script>
+    <script type="module" src="js/cotwBootstrap.js"></script>
+    <script type="module" src="js/terminalSocketHandler.js"></script>
+    <script type="module" src="js/cotwPanelToggle.js"></script>
+
+</body>
+</html>

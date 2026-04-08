@@ -1,0 +1,644 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fracture Engine — Psychic Ultrasound Monitor v010</title>
+<!--
+ FRACTURE ENGINE — Psychic Ultrasound Monitor v010
+ File: public/fracture-monitor.html
+
+ CLASSIFICATION: Theoretical computational model.
+ This visualization embeds a client-side copy of the Fracture Engine.
+ The algorithm is informed by established psychological research but
+ the specific implementation has not been empirically validated.
+ All thresholds labeled as proposed.
+
+ ARCHITECTURAL DECISION — SINGLE FILE (INTENTIONAL):
+ This file is deliberately self-contained. Zero build steps, zero npm
+ installs, zero module resolution. Canonical server-side implementation
+ lives in fracture-engine/index.js as ES modules.
+
+ PALETTE RESEARCH BASIS:
+ STRONG: Valdez and Mehrabian (1994) J Exp Psych General 123(4) 394-409
+ MODERATE: Openness to hue variety (Swami et al. 2013)
+ WEAK/DESIGN INFERENCE: OCEAN to base hue (no peer-reviewed formula)
+ All hue assignments: proposed, if plausible calibration via
+ collaboration with GridLab / Dr Daniel Johnson QUT
+
+ TWO HEX SYSTEMS:
+ Database #XXXXXX = primary key IDs (hexIdGenerator.js) NOT colors
+ Canvas   #RRGGBB = visual rendering colors (this file) NOT IDs
+
+ ANIMATION PHASES:
+ SINGLE=0s SHADOW=3s SPLITTING=6s SEPARATED=10s COMPLETE=14s
+
+ DATA FLOW:
+ 1. User clicks Load -> fetches GET /api/user/characters
+ 2. Dropdown populates with real characters from database
+ 3. User selects source entity, clicks Birth Event
+ 4. Source OCEAN from real database, PAD from Mehrabian (1996) baseline
+ 5. B-Roll OCEAN derived deterministically from source
+ 6. computeFracture() runs with real personality data
+-->
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+body{background:#050505;color:#33ff99;font-family:"Courier New",Courier,monospace;overflow:hidden;height:100vh}
+@media(prefers-reduced-motion:reduce){.crt-overlay{animation:none!important;opacity:0.98!important}.trajectory-chronic{animation:none!important}}
+.monitor{width:100vw;height:100vh;display:grid;grid-template-columns:2fr 1fr;grid-template-rows:40px 1fr 140px;gap:2px;background:#0a0a0a;border:2px solid #1a1a1a}
+.header{grid-column:1/span 2;background:#000;border-bottom:2px solid #33ff99;display:flex;align-items:center;justify-content:space-between;padding:0 20px;font-size:13px;letter-spacing:3px;text-transform:uppercase}
+.header .status{display:flex;align-items:center;gap:10px;font-size:11px}
+.status-dot{width:8px;height:8px;border-radius:50%;background:#ffd166;box-shadow:0 0 10px #ffd166}
+.status-dot.live{background:#33ff99;box-shadow:0 0 10px #33ff99}
+.status-dot.error{background:#ff004d;box-shadow:0 0 10px #ff004d}
+.scan-area{position:relative;background:radial-gradient(circle at center,#0a1a0f 0%,#000 100%);border-right:1px solid #1a1a1a;overflow:hidden}
+canvas{display:block;width:100%;height:100%}
+.crt-overlay{pointer-events:none;position:absolute;inset:0;background:repeating-linear-gradient(to bottom,rgba(0,255,120,0.05) 0px,rgba(0,255,120,0.05) 1px,transparent 1px,transparent 3px);mix-blend-mode:screen;animation:flicker 0.15s infinite}
+@keyframes flicker{0%{opacity:0.97}50%{opacity:1}100%{opacity:0.98}}
+.data-panel{background:#000;padding:10px;overflow-y:auto;font-size:11px;line-height:1.6;scrollbar-width:thin;scrollbar-color:#1a1a1a transparent}
+.panel-section{margin-bottom:14px;border:1px solid #1a1a1a;padding:8px;position:relative}
+.panel-section::before{content:attr(data-label);position:absolute;top:-8px;left:10px;background:#000;padding:0 5px;font-size:9px;color:#666;text-transform:uppercase;letter-spacing:1px}
+.data-row{display:flex;justify-content:space-between;margin:4px 0;padding:2px 0;border-bottom:1px dotted #1a1a1a}
+.data-row:last-child{border-bottom:none}
+.label{color:#666;font-size:11px}
+.value{color:#33ff99;font-weight:bold;font-size:11px}
+.value.negative{color:#ff6b6b}.value.positive{color:#33ff99}.value.warning{color:#ffd166}
+.value.critical{color:#ff004d;text-shadow:0 0 5px #ff004d}
+.severity-bar{width:100%;height:6px;background:#1a1a1a;margin-top:5px;overflow:hidden}
+.severity-fill{height:100%;background:linear-gradient(90deg,#33ff99 0%,#ffd166 50%,#ff004d 100%);transition:width 0.5s ease}
+.trajectory-badge{display:inline-block;padding:2px 8px;border:1px solid currentColor;font-size:10px;text-transform:uppercase;letter-spacing:1px}
+.trajectory-resilient{color:#33ff99}.trajectory-recovery{color:#5dade2}
+.trajectory-chronic{color:#ff6b6b;animation:pulse 2s infinite}
+.trajectory-depressed_improved{color:#9b59b6}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.pad-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px;margin-top:8px}
+.pad-cell{border:1px solid #1a1a1a;padding:6px;text-align:center}
+.pad-label{font-size:9px;color:#666;margin-bottom:4px}
+.pad-value{font-size:18px;font-weight:bold}
+.pad-value.pleasure{color:#33ff99}.pad-value.arousal{color:#ffd166}.pad-value.dominance{color:#5dade2}
+.rationale-text{font-size:9px;color:#888;margin-top:6px;padding:4px;border-left:2px solid #333;line-height:1.4;font-style:italic}
+.research-tag{font-size:8px;color:#555;margin-top:4px}
+.self-reg-bar{width:100%;height:4px;background:#1a1a1a;margin-top:3px;overflow:hidden}
+.self-reg-fill{height:100%}.self-reg-fill.high{background:#33ff99}.self-reg-fill.mid{background:#ffd166}.self-reg-fill.low{background:#ff6b6b}
+.palette-display{display:flex;gap:2px;margin-top:6px;flex-wrap:wrap}
+.palette-swatch{width:16px;height:16px;border:1px solid #333}
+.waveforms{grid-column:1/span 2;background:#000;border-top:2px solid #1a1a1a;position:relative;overflow:hidden}
+.controls{position:absolute;bottom:10px;right:10px;z-index:10;display:flex;gap:5px;align-items:center}
+button{background:#1a1a1a;border:1px solid #33ff99;color:#33ff99;padding:5px 15px;font-family:inherit;font-size:10px;cursor:pointer;text-transform:uppercase;letter-spacing:1px}
+button:hover{background:#33ff99;color:#000}
+button.birth{border-color:#ff004d;color:#ff004d}button.birth:hover{background:#ff004d;color:#000}
+button.random{border-color:#ffd166;color:#ffd166}button.random:hover{background:#ffd166;color:#000}
+button:disabled{opacity:0.3;cursor:not-allowed}
+select{background:#1a1a1a;border:1px solid #33ff99;color:#33ff99;padding:5px 10px;font-family:inherit;font-size:10px;text-transform:uppercase;letter-spacing:1px;max-width:200px}
+select option{background:#000;color:#33ff99}
+.seed-display{font-size:9px;color:#444;margin-top:5px}
+.no-data{display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:#333;font-size:12px;text-transform:uppercase;letter-spacing:2px;gap:15px}
+.no-data button{font-size:11px;padding:8px 20px}
+.debug-overlay{position:absolute;top:4px;right:4px;font-size:8px;color:#444;font-family:monospace;text-align:right;pointer-events:none;z-index:5;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="monitor">
+<div class="header">
+<div>Fracture Engine — Psychic Ultrasound Monitor v010</div>
+<div class="status"><span id="connStatus" role="status" aria-live="polite">OFFLINE</span><div class="status-dot" id="statusDot" aria-hidden="true"></div></div>
+</div>
+<div class="scan-area">
+<canvas id="scanCanvas" aria-label="Birth event visualization showing Mutai and B-Roll entity separation">Your browser does not support canvas.</canvas>
+<div class="crt-overlay" aria-hidden="true"></div>
+<div class="debug-overlay" id="debugOverlay" aria-hidden="true"></div>
+<div class="no-data" id="noData"><span>Awaiting Birth Event...</span><button onclick="loadCharacters()">Load Characters</button><span style="font-size:9px;color:#555;">Or use controls below for random simulation</span></div>
+</div>
+<div class="data-panel" id="dataPanel" style="display:none;" role="region" aria-label="Fracture data readout">
+<div class="panel-section" data-label="Birth Certificate">
+<div class="data-row"><span class="label">Source Entity</span><span class="value" id="sourceEntity">-</span></div>
+<div class="data-row"><span class="label">Character</span><span class="value" id="sourceCharName">-</span></div>
+<div class="data-row"><span class="label">Object ID</span><span class="value" id="objectName">-</span></div>
+<div class="data-row"><span class="label">Archetype</span><span class="value" id="archetype">-</span></div>
+<div class="data-row"><span class="label">Attachment</span><span class="value" id="attachment">-</span></div>
+<div class="seed-display" id="seedDisplay">Seed: -</div>
+</div>
+<div class="panel-section" data-label="Fractured State (PAD)">
+<div class="pad-grid">
+<div class="pad-cell"><div class="pad-label">PLEASURE</div><div class="pad-value pleasure" id="valP">-</div></div>
+<div class="pad-cell"><div class="pad-label">AROUSAL</div><div class="pad-value arousal" id="valA">-</div></div>
+<div class="pad-cell"><div class="pad-label">DOMINANCE</div><div class="pad-value dominance" id="valD">-</div></div>
+</div>
+<div class="pad-grid" style="margin-top:4px;">
+<div class="pad-cell"><div class="pad-label">TARGET P</div><div class="pad-value pleasure" id="targetP" style="font-size:12px;">-</div></div>
+<div class="pad-cell"><div class="pad-label">TARGET A</div><div class="pad-value arousal" id="targetA" style="font-size:12px;">-</div></div>
+<div class="pad-cell"><div class="pad-label">TARGET D</div><div class="pad-value dominance" id="targetD" style="font-size:12px;">-</div></div>
+</div>
+</div>
+<div class="panel-section" data-label="Life Signs">
+<div class="data-row"><span class="label">Hours Alive</span><span class="value" id="hoursAlive">0.0</span></div>
+<div class="data-row"><span class="label">Severity</span><span class="value critical" id="severityText">-</span></div>
+<div class="severity-bar"><div class="severity-fill" id="severityBar" style="width:0%"></div></div>
+<div class="data-row" style="margin-top:8px;"><span class="label">Trajectory</span><span class="trajectory-badge" id="trajectory" role="status">-</span></div>
+<div class="data-row"><span class="label">Recovery Rate</span><span class="value" id="recoveryRate">-</span></div>
+<div class="data-row"><span class="label">Fight Response</span><span class="value" id="fightStatus">-</span></div>
+</div>
+<div class="panel-section" data-label="Johnson Indicators">
+<div class="data-row"><span class="label">Self-Regulation</span><span class="value" id="selfRegVal">-</span></div>
+<div class="self-reg-bar"><div class="self-reg-fill" id="selfRegBar" style="width:0%"></div></div>
+<div class="data-row" style="margin-top:6px;"><span class="label">Source Burden</span><span class="value" id="sourceBurdenVal">-</span></div>
+<div class="severity-bar"><div class="severity-fill" id="sourceBurdenBar" style="width:0%"></div></div>
+<div id="rationaleBox" class="rationale-text" style="display:none;"></div>
+<div class="research-tag">Luxford, Johnson et al. (2022) Self-regulation mediator<br>Bonanno (2004, 2023) Recovery trajectories<br>Formosa, Johnson et al. (2022) Need satisfaction</div>
+</div>
+<div class="panel-section" data-label="Chromatic Signature">
+<div class="data-row"><span class="label">Mutai Palette</span></div>
+<div class="palette-display" id="mutaiPalette"></div>
+<div class="data-row" style="margin-top:6px;"><span class="label">B-Roll Palette</span></div>
+<div class="palette-display" id="brollPalette"></div>
+<div class="research-tag">Valdez and Mehrabian (1994) PAD to Lightness/Saturation<br>Hue: design inference - proposed, if plausible calibration via collaboration with GridLab / Dr Daniel Johnson QUT</div>
+</div>
+<div class="panel-section" data-label="Source Entity OCEAN">
+<div class="data-row"><span class="label">O / C / E / A / N</span><span class="value" id="sourceOceanDisplay">-</span></div>
+</div>
+<div class="panel-section" data-label="B-Roll Character OCEAN">
+<div class="data-row"><span class="label">O / C / E / A / N</span><span class="value" id="charOceanDisplay">-</span></div>
+<div class="research-tag">Derived deterministically from source entity OCEAN<br>Newborn variation via Mulberry32 seeded from entity ID</div>
+</div>
+</div>
+<div class="waveforms"><canvas id="waveCanvas" aria-label="PAD waveform display">Your browser does not support canvas.</canvas><div class="crt-overlay" aria-hidden="true"></div>
+<div class="controls">
+<select id="charSelect" disabled aria-label="Select source entity"><option value="">-- Load Characters --</option></select>
+<button onclick="loadCharacters()">Load</button>
+<button class="birth" id="birthBtn" disabled onclick="birthFromSelected()">Birth Event</button>
+<button class="random" onclick="simulateRandom()">Random</button>
+<button onclick="clearData()">Clear</button>
+</div>
+</div>
+</div>
+<script>
+'use strict';
+/*
+ * FRACTURE ENGINE embedded client (canonical: fracture-engine/index.js)
+ * Research: Mehrabian (1996), Luxford/Johnson (2022), Bonanno (2004,2023)
+ * FAANG v4: const/let, delta-time, validation, ARIA, debug overlay
+ *
+ * SINGLE-FILE ARCHITECTURE: Intentional deployment decision (see HTML header).
+ * Canvas #RRGGBB = visual colors. Database #XXXXXX = IDs. Separate systems.
+ */
+
+// === DETERMINISTIC ALGORITHMS ===
+const djb2 = function(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) { h = ((h << 5) + h) + s.charCodeAt(i); }
+  return h >>> 0;
+};
+
+const mulberry32 = function(seed) {
+  let s = seed;
+  return function() {
+    let t = s += 0x6D2B79F5;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+};
+
+// === MEHRABIAN (1996) PAD BASELINE ===
+const oceanToBaselinePAD = function(o) {
+  if (!o) return { P: 0, A: 0.1, D: -0.2 };
+  const E = o.extraversion / 100, A = o.agreeableness / 100;
+  const N = o.neuroticism / 100, O = o.openness / 100;
+  return { P: 0.19*E + 0.39*A - 0.25*N, A: 0.42*A + 0.65*N, D: 0.75*E - 0.27*A + 0.21*O };
+};
+
+// === LUXFORD, JOHNSON ET AL. (2022) SELF-REGULATION ===
+const deriveSelfRegulation = function(o) {
+  if (!o) return 50;
+  return Math.max(0, Math.min(100, o.conscientiousness*0.50 + o.extraversion*0.15 + o.openness*0.10 - o.neuroticism*0.35 - o.agreeableness*0.05 + 35));
+};
+
+// === BONANNO (2004, 2023) SOURCE BURDEN ===
+const calculateSourceBurden = function(o) {
+  if (!o) return 50;
+  return Math.max(0, Math.min(100, o.neuroticism*0.60 - o.agreeableness*0.40 + 50));
+};
+
+// === VALIDATION (R1,R2,R3,R4 consensus) ===
+const validateOceanField = function(val, name) {
+  const n = Number(val);
+  if (isNaN(n)) throw new Error(name + ' is not a number');
+  return Math.max(0, Math.min(100, n));
+};
+
+const validateOcean = function(raw) {
+  return {
+    openness: validateOceanField(raw.openness ?? 50, 'openness'),
+    conscientiousness: validateOceanField(raw.conscientiousness ?? 50, 'conscientiousness'),
+    extraversion: validateOceanField(raw.extraversion ?? 50, 'extraversion'),
+    agreeableness: validateOceanField(raw.agreeableness ?? 50, 'agreeableness'),
+    neuroticism: validateOceanField(raw.neuroticism ?? 50, 'neuroticism')
+  };
+};
+
+// === FRACTURE CONFIG ===
+const CFG = Object.freeze({SEVERITY_THRESHOLD:0.3,SEVERITY_STEEPNESS:6,FRAGMENTATION_FACTOR:0.3,NEONATAL_BLEND_BASE:0.3,VARIATION_P:0.3,VARIATION_A:0.4,VARIATION_D:0.5,FIGHT_CHANCE:0.3,FIGHT_DOMINANCE_BOOST:0.4,OVERWHELM_AROUSAL_DROP:0.3,AROUSAL_ACTIVATION:0.6,DOMINANCE_DROP_BASE:0.5,PLEASURE_DROP_BASE:1.0});
+const ARC = Object.freeze({universal:{pMod:0.3,aMod:0.4,dMod:0.2,tm:0.6},confined_object:{pMod:0.5,aMod:0.6,dMod:0.3,tm:0.8},worn_object:{pMod:0.6,aMod:0.5,dMod:0.4,tm:0.9},consumed_object:{pMod:0.4,aMod:0.7,dMod:0.2,tm:0.7},companion_object:{pMod:0.8,aMod:0.5,dMod:0.6,tm:1.2}});
+const NEO = Object.freeze({P:0,A:0.3,D:-0.4});
+const TRJ = Object.freeze({RESILIENT:'resilient',RECOVERY:'recovery',CHRONIC:'chronic',DEPRESSED_IMPROVED:'depressed_improved'});
+
+// === Animation phase constants (documented per R5) ===
+const PHASE = Object.freeze({ SINGLE:0, SHADOW:3, SPLITTING:6, SEPARATED:10 });
+
+// === CORE COMPUTE FRACTURE ===
+const computeFracture = function(p) {
+  const sP=p.sourceP, sA=p.sourceA, sD=p.sourceD, att=p.attachmentStrength;
+  const ot=p.objectType, eid=p.entityId, oid=p.objectId, oc=p.ocean, soc=p.sourceOcean;
+  const seed=djb2(eid+oid+ot), prng=mulberry32(seed), pr=ARC[ot];
+  let sev=Math.max(0,Math.min(1,att*(0.5+0.5*sP)*pr.tm));
+  const sf=1/(1+Math.exp(-CFG.SEVERITY_STEEPNESS*(sev-CFG.SEVERITY_THRESHOLD)));
+  const vP=(prng()-0.5)*CFG.VARIATION_P, vA=(prng()-0.5)*CFG.VARIATION_A, vD=(prng()-0.5)*CFG.VARIATION_D;
+  const pDrop=(CFG.PLEASURE_DROP_BASE+sP)*att*pr.pMod;
+  let fP=sP-pDrop*sf+vP;
+  const aShift=sA>0.5?-CFG.OVERWHELM_AROUSAL_DROP*sf:CFG.AROUSAL_ACTIVATION*sf;
+  let fA=sA+aShift*pr.aMod+vA;
+  const dDrop=CFG.DOMINANCE_DROP_BASE*att*pr.dMod;
+  let fD, fight=false;
+  if(sD>0.3&&sev>0.5&&prng()<CFG.FIGHT_CHANCE){fD=sD+CFG.FIGHT_DOMINANCE_BOOST*sf+vD;fight=true}else{fD=sD-dDrop*sf+vD}
+  const frag=sf*CFG.FRAGMENTATION_FACTOR;
+  fP+=(prng()-0.5)*frag; fA+=(prng()-0.5)*frag; fD+=(prng()-0.5)*frag;
+  fP=Math.max(-1,Math.min(1,fP)); fA=Math.max(-1,Math.min(1,fA)); fD=Math.max(-1,Math.min(1,fD));
+  const bf=CFG.NEONATAL_BLEND_BASE+(1-CFG.NEONATAL_BLEND_BASE)*sf;
+  const P=NEO.P*(1-bf)+fP*bf, A=NEO.A*(1-bf)+fA*bf, D=NEO.D*(1-bf)+fD*bf;
+  const sr=deriveSelfRegulation(oc), sb=calculateSourceBurden(soc), bl=oceanToBaselinePAD(oc);
+  let tr, rat, rr;
+  if(sf>0.7&&sb>65&&oc&&oc.conscientiousness>50){tr=TRJ.DEPRESSED_IMPROVED;rat='High severity + high source burden + adequate conscientiousness = relief-based recovery';rr=0.08+(oc.conscientiousness/100)*0.04}
+  else if(sr<35&&oc&&oc.neuroticism>60){tr=TRJ.CHRONIC;rat='Low self-regulation + high neuroticism predicts persistent distress';rr=0.02}
+  else if(sf<0.3||(oc&&oc.extraversion>65&&sr>60)){tr=TRJ.RESILIENT;rat='Low severity or high extraversion with strong self-regulation = minimal impact';rr=0.12}
+  else{tr=TRJ.RECOVERY;rat='Moderate severity with mixed personality factors = gradual recovery';rr=oc?(0.04+oc.conscientiousness/100*0.04+oc.extraversion/100*0.02-oc.neuroticism/100*0.05+oc.openness/100*0.02):0.04}
+  const r3=function(v){return Math.round(v*1000)/1000};
+  return{P:r3(P),A:r3(A),D:r3(D),severityFactor:r3(sf),severity:r3(sev),trajectory:tr,trajectoryRationale:rat,recoveryRate:r3(rr),selfRegulation:Math.round(sr*100)/100,sourceBurden:Math.round(sb*100)/100,fightTriggered:fight,targetBaseline:{P:r3(bl.P),A:r3(bl.A),D:r3(bl.D)},seed:seed};
+};
+
+// === RECOVERY ===
+const computeRecovery = function(fr,hrs) {
+  const d=hrs/24, tb=fr.targetBaseline, rr=fr.recoveryRate, tr=fr.trajectory;
+  let dc;
+  if(tr===TRJ.CHRONIC){dc=Math.exp(-rr*0.3*d)}
+  else if(tr===TRJ.RESILIENT){dc=Math.exp(-rr*2.0*d)}
+  else if(tr===TRJ.DEPRESSED_IMPROVED){const dd=2.0;if(d<dd){dc=Math.exp(-rr*0.3*d)}else{dc=Math.exp(-rr*0.3*dd)*Math.exp(-rr*1.8*(d-dd))}}
+  else{dc=Math.exp(-rr*d)}
+  const w=0.05*Math.sin(d*0.5)*dc;
+  return{P:Math.round(Math.max(-1,Math.min(1,tb.P+(fr.P-tb.P)*dc+w))*1000)/1000,A:Math.round(Math.max(-1,Math.min(1,tb.A+(fr.A-tb.A)*dc+w*0.7))*1000)/1000,D:Math.round(Math.max(-1,Math.min(1,tb.D+(fr.D-tb.D)*dc+w*0.5))*1000)/1000,decay:Math.round(dc*1000)/1000};
+};
+
+// === PALETTE GENERATOR ===
+// PRIMARY: PAD to Lightness/Saturation (Valdez and Mehrabian 1994)
+// SECONDARY: OCEAN to Hue (DESIGN INFERENCE - if plausible calibration via collaboration with GridLab / Dr Daniel Johnson QUT)
+// Canvas #RRGGBB colors are NOT database #XXXXXX IDs
+const hslToHex = function(h,s,l) {
+  h/=360;s/=100;l/=100;let r,g,b;
+  if(s===0){r=g=b=l}else{
+    const h2r=function(p,q,t){if(t<0)t+=1;if(t>1)t-=1;if(t<1/6)return p+(q-p)*6*t;if(t<1/2)return q;if(t<2/3)return p+(q-p)*(2/3-t)*6;return p};
+    const q=l<0.5?l*(1+s):l+s-l*s, p=2*l-q;
+    r=h2r(p,q,h+1/3);g=h2r(p,q,h);b=h2r(p,q,h-1/3);
+  }
+  const tx=function(x){return Math.round(x*255).toString(16).padStart(2,'0')};
+  return '#'+tx(r)+tx(g)+tx(b);
+};
+
+// Luminance check (R1 accessibility guard)
+const relativeLuminance = function(hex) {
+  const r=parseInt(hex.slice(1,3),16)/255, g=parseInt(hex.slice(3,5),16)/255, b=parseInt(hex.slice(5,7),16)/255;
+  return 0.2126*r + 0.7152*g + 0.0722*b;
+};
+
+const oceanToBaseHue = function(o) {
+  if(!o)return 180;
+  let h=180+(o.extraversion-50)*1.2-(o.neuroticism-50)*0.8+(o.openness-50)*0.6+(o.agreeableness-50)*0.4;
+  return((h%360)+360)%360;
+};
+
+const generatePalette = function(ocean,pad,entityId,count) {
+  count=count||10;
+  const p=pad?pad.P:0, a=pad?pad.A:0, d=pad?pad.D:0;
+  const pN=(p+1)/2, aN=(a+1)/2;
+  let baseL=35+pN*45+aN*5; baseL=Math.max(30,Math.min(85,baseL+d*5));
+  let baseS=45+aN*40+pN*10; baseS=Math.max(40,Math.min(95,baseS));
+  const baseH=oceanToBaseHue(ocean);
+  const op=ocean?ocean.openness/100:0.5, spread=8+op*24;
+  const ps=djb2((entityId||'#000000')+'palette'), prng=mulberry32(ps);
+  const pal=[];
+  for(let i=0;i<count;i++){
+    const ho=(prng()-0.5)*spread*2, so=(prng()-0.5)*15, lo=(prng()-0.5)*12;
+    let hex=hslToHex(((baseH+ho)%360+360)%360,Math.max(40,Math.min(95,baseS+so)),Math.max(30,Math.min(85,baseL+lo)));
+    // Luminance guard: ensure visible on black background (min 0.08)
+    if(relativeLuminance(hex)<0.08){hex=hslToHex(((baseH+ho)%360+360)%360,Math.max(40,Math.min(95,baseS+so)),45)}
+    pal.push(hex);
+  }
+  return pal;
+};
+
+// === NEWBORN OCEAN DERIVATION ===
+// Design decision, not research-backed. Separation introduces personality
+// divergence from source. +/-15 points per dimension, Mulberry32 seeded.
+const deriveNewbornOcean = function(sourceOcean, sourceEntityId) {
+  const prng=mulberry32(djb2(sourceEntityId+'newborn_ocean'));
+  const vary=function(base){return Math.max(0,Math.min(100,Math.round(base+(prng()-0.5)*30)))};
+  return{openness:vary(sourceOcean.openness),conscientiousness:vary(sourceOcean.conscientiousness),extraversion:vary(sourceOcean.extraversion),agreeableness:vary(sourceOcean.agreeableness),neuroticism:vary(sourceOcean.neuroticism)};
+};
+
+// === UI STATE ===
+let currentData=null, currentFracture=null, birthTime=null, animationId=null;
+let t=0, lastFrameTime=0, spasmTimer=0;
+let mutaiPal=[], brollPal=[];
+let loadedCharacters=[];
+
+// Debug metrics (R1 observability)
+const metrics={fractureMs:0,paletteMs:0,renderMs:0,fps:0};
+let frameCount=0, fpsAccum=0, lastFpsUpdate=0;
+
+// Canvas setup with error handling (R5)
+let scanCanvas, scanCtx, waveCanvas, waveCtx;
+try {
+  scanCanvas=document.getElementById('scanCanvas');
+  scanCtx=scanCanvas.getContext('2d');
+  waveCanvas=document.getElementById('waveCanvas');
+  waveCtx=waveCanvas.getContext('2d');
+  if(!scanCtx||!waveCtx) throw new Error('Canvas 2D not supported');
+} catch(e) {
+  document.body.innerHTML='<div style="color:#ff004d;padding:40px;font-family:monospace;">Canvas 2D context unavailable: '+e.message+'</div>';
+}
+
+const resize = function() {
+  if(!scanCanvas||!waveCanvas) return;
+  scanCanvas.width=scanCanvas.parentElement.clientWidth;
+  scanCanvas.height=scanCanvas.parentElement.clientHeight;
+  waveCanvas.width=waveCanvas.parentElement.clientWidth;
+  waveCanvas.height=waveCanvas.parentElement.clientHeight;
+};
+window.addEventListener('resize',resize);
+resize();
+
+// Seeded PRNG for random simulation
+let inputPrng=42;
+const sRand=function(){inputPrng=(inputPrng*16807)%2147483647;return(inputPrng-1)/2147483646};
+
+// === LOAD CHARACTERS FROM LIVE API ===
+const loadCharacters = function() {
+  const statusEl=document.getElementById('connStatus');
+  const dotEl=document.getElementById('statusDot');
+  const selectEl=document.getElementById('charSelect');
+  const birthBtn=document.getElementById('birthBtn');
+  statusEl.textContent='CONNECTING...';
+  dotEl.className='status-dot';
+
+  fetch('/api/user/characters', { credentials: 'include' }).then(function(r){
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    return r.json();
+  }).then(function(data){
+    // Validate response structure (R1,R2 consensus)
+    if(!data||typeof data!=='object'||!data.success||!Array.isArray(data.characters)){
+      throw new Error('Invalid API response structure');
+    }
+    loadedCharacters=data.characters;
+    statusEl.textContent='LIVE ('+data.characters.length+' CHARS)';
+    dotEl.className='status-dot live';
+    selectEl.innerHTML='<option value="">-- Select Source Entity --</option>';
+    for(let i=0;i<data.characters.length;i++){
+      const c=data.characters[i];
+      const opt=document.createElement('option');
+      opt.value=c.character_id;
+      opt.textContent=(c.character_name||'Unknown')+' ('+c.character_id+') '+(c.category||'');
+      selectEl.appendChild(opt);
+    }
+    selectEl.disabled=false;
+    birthBtn.disabled=false;
+  }).catch(function(err){
+    statusEl.textContent='OFFLINE: '+err.message;
+    dotEl.className='status-dot error';
+    selectEl.innerHTML='<option value="">-- Connection Failed --</option>';
+  });
+};
+
+// === BIRTH FROM SELECTED CHARACTER ===
+const birthFromSelected = function() {
+  const selectEl=document.getElementById('charSelect');
+  const charId=selectEl.value;
+  if(!charId) return;
+  let sourceChar=null;
+  for(let i=0;i<loadedCharacters.length;i++){
+    if(loadedCharacters[i].character_id===charId){sourceChar=loadedCharacters[i];break}
+  }
+  if(!sourceChar) return;
+
+  try {
+    // Validate OCEAN from database (R1,R2 consensus)
+    const sourceOcean=validateOcean(sourceChar);
+    const sourcePAD=oceanToBaselinePAD(sourceOcean);
+    const brollOcean=deriveNewbornOcean(sourceOcean,sourceChar.character_id);
+    const attPrng=mulberry32(djb2(sourceChar.character_id+'attachment'));
+    const attachmentStrength=0.4+attPrng()*0.5;
+    const arcKeys=Object.keys(ARC);
+    const arcPrng=mulberry32(djb2(sourceChar.character_id+'archetype'));
+    const objectType=arcKeys[Math.floor(arcPrng()*arcKeys.length)];
+    const oidPrng=mulberry32(djb2(sourceChar.character_id+'object'));
+    const objectId='#B0'+Math.floor(oidPrng()*9000+1000).toString(16).toUpperCase().padStart(4,'0');
+
+    const t0=performance.now();
+    const fracture=computeFracture({sourceP:sourcePAD.P,sourceA:sourcePAD.A,sourceD:sourcePAD.D,attachmentStrength:attachmentStrength,objectType:objectType,entityId:sourceChar.character_id,objectId:objectId,ocean:brollOcean,sourceOcean:sourceOcean});
+    metrics.fractureMs=Math.round((performance.now()-t0)*100)/100;
+
+    const t1=performance.now();
+    mutaiPal=generatePalette(sourceOcean,sourcePAD,sourceChar.character_id,10);
+    brollPal=generatePalette(brollOcean,{P:fracture.P,A:fracture.A,D:fracture.D},objectId,10);
+    metrics.paletteMs=Math.round((performance.now()-t1)*100)/100;
+
+    currentFracture=fracture;
+    currentData={entityId:sourceChar.character_id,characterName:sourceChar.character_name||'Unknown',objectId:objectId,objectType:objectType,attachmentStrength:attachmentStrength,ocean:brollOcean,sourceOcean:sourceOcean,fracture:fracture};
+    displayFracture(currentData);
+  } catch(err) {
+    document.getElementById('connStatus').textContent='ERROR: '+err.message;
+    document.getElementById('statusDot').className='status-dot error';
+  }
+};
+
+// === RANDOM SIMULATION ===
+const simulateRandom = function() {
+  inputPrng=Date.now()%2147483647;
+  const aks=Object.keys(ARC),ot=aks[Math.floor(sRand()*aks.length)];
+  const mk=function(){return Math.floor(20+sRand()*70)};
+  const soc={openness:mk(),conscientiousness:mk(),extraversion:mk(),agreeableness:mk(),neuroticism:mk()};
+  const eid='#7000'+String(Math.floor(sRand()*90+10)),oid='#B000'+String(Math.floor(sRand()*90+10));
+  const oc=deriveNewbornOcean(soc,eid);
+  const sPAD=oceanToBaselinePAD(soc);
+  const att=0.4+sRand()*0.5;
+
+  const t0=performance.now();
+  const fr=computeFracture({sourceP:sPAD.P,sourceA:sPAD.A,sourceD:sPAD.D,attachmentStrength:att,objectType:ot,entityId:eid,objectId:oid,ocean:oc,sourceOcean:soc});
+  metrics.fractureMs=Math.round((performance.now()-t0)*100)/100;
+
+  const t1=performance.now();
+  mutaiPal=generatePalette(soc,sPAD,eid,10);
+  brollPal=generatePalette(oc,{P:fr.P,A:fr.A,D:fr.D},oid,10);
+  metrics.paletteMs=Math.round((performance.now()-t1)*100)/100;
+
+  currentFracture=fr;
+  currentData={entityId:eid,characterName:'RANDOM',objectId:oid,objectType:ot,attachmentStrength:att,ocean:oc,sourceOcean:soc,fracture:fr};
+  displayFracture(currentData);
+};
+
+// === DISPLAY ===
+const fp = function(v){return typeof v!=='number'?'-':v>0?'+'+v.toFixed(3):v.toFixed(3)};
+
+const updatePAD = function(p,a,d) {
+  const pe=document.getElementById('valP');pe.textContent=fp(p);pe.className='pad-value pleasure '+(p<0?'negative':'positive');
+  const ae=document.getElementById('valA');ae.textContent=fp(a);ae.className='pad-value arousal '+(Math.abs(a)>0.5?'warning':'');
+  const de=document.getElementById('valD');de.textContent=fp(d);de.className='pad-value dominance '+(d<0?'negative':'positive');
+};
+
+const rpSwatches = function(id,colors) {
+  const c=document.getElementById(id);c.innerHTML='';
+  for(let i=0;i<colors.length;i++){const s=document.createElement('div');s.className='palette-swatch';s.style.background=colors[i];s.title=colors[i];c.appendChild(s)}
+};
+
+const displayFracture = function(data) {
+  currentData=data;birthTime=new Date();spasmTimer=0;lastFrameTime=performance.now();
+  document.getElementById('noData').style.display='none';
+  document.getElementById('dataPanel').style.display='block';
+  document.getElementById('sourceEntity').textContent=data.entityId;
+  document.getElementById('sourceCharName').textContent=data.characterName||'-';
+  document.getElementById('objectName').textContent=data.objectId;
+  document.getElementById('archetype').textContent=data.objectType;
+  document.getElementById('attachment').textContent=data.attachmentStrength.toFixed(2);
+  document.getElementById('seedDisplay').textContent='Seed: '+data.fracture.seed;
+  const f=data.fracture;updatePAD(f.P,f.A,f.D);
+  const tb=f.targetBaseline;
+  document.getElementById('targetP').textContent=fp(tb.P);
+  document.getElementById('targetA').textContent=fp(tb.A);
+  document.getElementById('targetD').textContent=fp(tb.D);
+  document.getElementById('severityText').textContent=(f.severityFactor*100).toFixed(1)+'%';
+  document.getElementById('severityBar').style.width=(f.severityFactor*100)+'%';
+  const te=document.getElementById('trajectory');te.textContent=f.trajectory;te.className='trajectory-badge trajectory-'+f.trajectory;
+  document.getElementById('recoveryRate').textContent=f.recoveryRate.toFixed(3)+'/day';
+  document.getElementById('fightStatus').textContent=f.fightTriggered?'TRIGGERED':'NONE';
+  document.getElementById('fightStatus').className='value '+(f.fightTriggered?'warning':'');
+  const sr=f.selfRegulation;
+  document.getElementById('selfRegVal').textContent=sr.toFixed(1);
+  document.getElementById('selfRegVal').className='value '+(sr>60?'positive':sr<35?'critical':'warning');
+  document.getElementById('selfRegBar').style.width=sr+'%';
+  document.getElementById('selfRegBar').className='self-reg-fill '+(sr>60?'high':sr<35?'low':'mid');
+  const sb=f.sourceBurden;
+  document.getElementById('sourceBurdenVal').textContent=sb.toFixed(1);
+  document.getElementById('sourceBurdenVal').className='value '+(sb>65?'critical':sb>50?'warning':'positive');
+  document.getElementById('sourceBurdenBar').style.width=sb+'%';
+  const rb=document.getElementById('rationaleBox');
+  if(f.trajectoryRationale){rb.textContent=f.trajectoryRationale;rb.style.display='block'}else{rb.style.display='none'}
+  rpSwatches('mutaiPalette',mutaiPal);rpSwatches('brollPalette',brollPal);
+  const s=data.sourceOcean;document.getElementById('sourceOceanDisplay').textContent=s.openness+' / '+s.conscientiousness+' / '+s.extraversion+' / '+s.agreeableness+' / '+s.neuroticism;
+  const c=data.ocean;document.getElementById('charOceanDisplay').textContent=c.openness+' / '+c.conscientiousness+' / '+c.extraversion+' / '+c.agreeableness+' / '+c.neuroticism;
+  currentFracture=f;
+  if(animationId)cancelAnimationFrame(animationId);
+  animate(performance.now());
+};
+
+const clearData = function() {
+  currentData=null;currentFracture=null;birthTime=null;mutaiPal=[];brollPal=[];
+  document.getElementById('noData').style.display='flex';
+  document.getElementById('dataPanel').style.display='none';
+  document.getElementById('debugOverlay').textContent='';
+  if(scanCtx)scanCtx.clearRect(0,0,scanCanvas.width,scanCanvas.height);
+  if(waveCtx)waveCtx.clearRect(0,0,waveCanvas.width,waveCanvas.height);
+};
+
+// === CANVAS ANIMATION (delta-time per R2) ===
+const noise = function(x,y,t){return Math.sin(x*0.02+t*0.02)+Math.cos(y*0.02-t*0.015)};
+const ease = function(el,st,dur){const r=(el-st)/dur,c=Math.max(0,Math.min(1,r));return c<0.5?4*c*c*c:1-Math.pow(-2*c+2,3)/2};
+
+const drawScan = function() {
+  const ctx=scanCtx,w=scanCanvas.width,h=scanCanvas.height,cx=w/2,cy=h/2;
+  ctx.fillStyle='rgba(0,0,0,0.08)';ctx.fillRect(0,0,w,h);
+  if(!currentData)return;
+  const sv=currentFracture?currentFracture.severityFactor:0.5;
+  const pV=currentFracture?currentFracture.P:0,aV=currentFracture?currentFracture.A:0;
+  const chaos=sv*25,bR=Math.min(w,h)*0.14;
+  const el=birthTime?(Date.now()-birthTime.getTime())/1000:0;
+  spasmTimer+=0.01;
+  const shP=ease(el,PHASE.SHADOW,PHASE.SPLITTING-PHASE.SHADOW);
+  const spP=ease(el,PHASE.SPLITTING,PHASE.SEPARATED-PHASE.SPLITTING);
+  const muP=ease(el,PHASE.SEPARATED,4);
+  const mxS=w*0.18;
+  const mCx=cx-spP*mxS+Math.cos(-t*0.3)*30*spP,mCy=cy+Math.sin(-t*0.3)*20*spP;
+  const bCx=cx+spP*mxS+Math.cos(t*0.35)*25*spP,bCy=cy+Math.sin(t*0.35)*25*spP;
+
+  if(spP>0.1){ctx.strokeStyle='rgba(51,255,153,'+Math.min(spP*0.08,0.06)+')';ctx.lineWidth=1;ctx.beginPath();for(let y=0;y<h;y+=3){const wb=Math.sin(y*0.03+t*0.8)*(8+chaos*0.5)*spP;if(y===0)ctx.moveTo(cx+wb,y);else ctx.lineTo(cx+wb,y)}ctx.stroke()}
+
+  const mg=ctx.createRadialGradient(mCx,mCy,0,mCx,mCy,bR*2.5);mg.addColorStop(0,'rgba(51,255,153,0.08)');mg.addColorStop(0.5,'rgba(51,255,153,0.02)');mg.addColorStop(1,'transparent');ctx.fillStyle=mg;ctx.fillRect(0,0,w,h);
+  const ms=-t*0.4;ctx.strokeStyle='rgba(51,255,153,'+(0.5+sv*0.3)+')';ctx.lineWidth=2;ctx.beginPath();
+  for(let i=0;i<120;i++){const an=(i/120)*Math.PI*2+ms,br=Math.sin(t*1.2+an*3)*5,gr=Math.sin(t*0.5)*3;const r=bR+br+gr+noise(Math.cos(an)*50,Math.sin(an)*50,t)*4;const x=mCx+Math.cos(an)*r,y=mCy+Math.sin(an)*r;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.closePath();ctx.stroke();
+  for(let rn=1;rn<=3;rn++){const rR=bR*(rn/4)*(0.8+Math.sin(t*1.5+rn)*0.2);ctx.strokeStyle='rgba(51,255,153,'+(0.15/rn)+')';ctx.beginPath();ctx.arc(mCx,mCy,rR,0,Math.PI*2);ctx.stroke()}
+  if(mutaiPal.length>0){for(let i=0;i<mutaiPal.length;i++){const pa=t*0.4+(i/mutaiPal.length)*Math.PI*2,pd=bR*0.6+Math.sin(t+i*1.7)*10;ctx.fillStyle=mutaiPal[i]+'88';ctx.beginPath();ctx.arc(mCx+Math.cos(pa)*pd,mCy+Math.sin(pa)*pd,2+Math.sin(t+i)*1.5,0,Math.PI*2);ctx.fill()}}
+  ctx.font='9px Courier New';
+  if(spP<0.3){ctx.fillStyle='rgba(51,255,153,'+(0.3-spP)+')';ctx.fillText('ENTITY',mCx-18,mCy-bR-12)}
+  else{ctx.fillStyle='rgba(51,255,153,'+Math.min((spP-0.3)*0.5,0.3)+')';ctx.fillText('MUTAI',mCx-15,mCy-bR-12)}
+
+  if(shP>0){
+    const bg=ctx.createRadialGradient(bCx,bCy,0,bCx,bCy,bR*2.5);bg.addColorStop(0,'rgba(255,0,77,'+shP*0.06+')');bg.addColorStop(0.5,'rgba(255,0,77,'+shP*0.018+')');bg.addColorStop(1,'transparent');ctx.fillStyle=bg;ctx.fillRect(0,0,w,h);
+    const bs=t*0.4,fl=spP<0.1?0.3+Math.sin(t*12)*0.3+Math.sin(t*7.3)*0.2:1,ba=shP*fl*(0.4+sv*0.4);
+    ctx.strokeStyle='rgba(255,0,77,'+Math.min(ba,0.9)+')';ctx.lineWidth=2;ctx.beginPath();
+    for(let i=0;i<120;i++){const an=(i/120)*Math.PI*2+bs,br=Math.sin(t*1.2+an*3)*5,gr=Math.sin(t*0.5)*3;const mR=bR+br+gr+noise(Math.cos(an)*50,Math.sin(an)*50,t)*4,jg=(i%3===0)?chaos*0.6:0,sk=Math.sin(an*7+t*2)*(6+sv*8);const cR=bR*0.85+sk+jg*Math.sin(t*3+i),r=mR*(1-muP)+cR*muP;const x=bCx+Math.cos(an)*r,y=bCy+Math.sin(an)*r;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.closePath();ctx.stroke();
+    if(muP>0.2){ctx.strokeStyle='rgba(255,107,107,'+(muP-0.2)*0.2+')';ctx.lineWidth=1;for(let i=0;i<5;i++){const sa=(i/5)*Math.PI*2+t*0.5;ctx.beginPath();ctx.moveTo(bCx,bCy);ctx.lineTo(bCx+Math.cos(sa)*bR*0.9,bCy+Math.sin(sa)*bR*0.9);ctx.stroke()}}
+    if(muP>0.3&&brollPal.length>0){const pc=Math.floor(muP*brollPal.length);for(let i=0;i<pc;i++){const pa=-t*0.6+(i/brollPal.length)*Math.PI*2,pd=bR*0.5+Math.sin(t*2+i*2.3)*15;ctx.fillStyle=brollPal[i]+'66';ctx.beginPath();ctx.arc(bCx+Math.cos(pa)*pd,bCy+Math.sin(pa)*pd,1.5+Math.sin(t*2+i)*1,0,Math.PI*2);ctx.fill()}}
+    if(spP>0.5){ctx.fillStyle='rgba(255,0,77,'+Math.min((spP-0.5)*0.6,0.3)+')';ctx.font='9px Courier New';ctx.fillText('B-ROLL CHAOS',bCx-30,bCy-bR-12)}
+  }
+
+  if(spP>0.05&&spP<0.98){const tl=1-spP,ac=mutaiPal.concat(brollPal);for(let i=0;i<6;i++){const pr=i/5,yo=(pr-0.5)*bR*1.5,tn=Math.sin(t*1.5+i*0.8)*(5+chaos*0.3);if(spP>0.5+(i/6)*0.4)continue;const sx=mCx+bR*0.5,sy=mCy+yo,ex=bCx-bR*0.5,ey=bCy+yo,mx=(sx+ex)/2,my=(sy+ey)/2+tn;const ta=tl*0.12,tc=ac.length>0?ac[i%ac.length]:'#33ff99',ah=Math.floor(Math.min(ta,1)*255).toString(16).padStart(2,'0');ctx.strokeStyle=tc+ah;ctx.lineWidth=Math.max(0.5,tl*2);ctx.beginPath();ctx.moveTo(sx,sy);ctx.quadraticCurveTo(mx,my,ex,ey);ctx.stroke()}}
+
+  ctx.strokeStyle='rgba(51,255,153,0.25)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(20,h-20);ctx.lineTo(20+Math.abs(pV)*60,h-20);ctx.stroke();
+  ctx.fillStyle='rgba(51,255,153,0.2)';ctx.font='8px Courier New';ctx.fillText('P',8,h-17);
+  ctx.strokeStyle='rgba(255,209,102,0.25)';ctx.beginPath();ctx.moveTo(20,h-10);ctx.lineTo(20+Math.abs(aV)*60,h-10);ctx.stroke();
+  ctx.fillStyle='rgba(255,209,102,0.2)';ctx.fillText('A',8,h-7);
+  ctx.fillStyle='rgba(102,102,102,0.4)';ctx.font='8px Courier New';
+  let pl='GESTATING';if(el>=PHASE.SEPARATED+4)pl='SEPARATED';else if(el>=PHASE.SEPARATED)pl='MUTATING';else if(el>=PHASE.SPLITTING)pl='FRACTURING';else if(el>=PHASE.SHADOW)pl='SHADOW FORMING';
+  ctx.fillText(pl,10,15);
+};
+
+const drawWaves = function() {
+  const ctx=waveCtx,w=waveCanvas.width,h=waveCanvas.height;
+  ctx.fillStyle='rgba(0,0,0,0.2)';ctx.fillRect(0,0,w,h);
+  const pV=currentFracture?currentFracture.P:0,aV=currentFracture?currentFracture.A:0,dV=currentFracture?currentFracture.D:0,sv=currentFracture?currentFracture.severityFactor:0;
+  ctx.strokeStyle='#33ff99';ctx.lineWidth=1;ctx.beginPath();for(let x=0;x<w;x++){const y=h/6+(Math.sin((x+t*50)*0.02)*15+Math.sin((x+t*80)*0.05)*3*sv)*Math.abs(pV||0.3);if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke();ctx.fillStyle='#33ff9944';ctx.font='9px Courier New';ctx.fillText('P',5,h/6-18);
+  ctx.strokeStyle='#ffd166';ctx.beginPath();for(let x=0;x<w;x++){const y=h/2+(Math.sin((x+t*30)*0.03)*15+Math.cos((x+t*60)*0.04)*4*sv)*Math.abs(aV||0.3);if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke();ctx.fillStyle='#ffd16644';ctx.fillText('A',5,h/2-18);
+  ctx.strokeStyle='#5dade2';ctx.beginPath();for(let x=0;x<w;x++){const y=5*h/6+(Math.sin((x+t*40)*0.025)*15+Math.sin((x+t*70)*0.06)*3*sv)*Math.abs(dV||0.3);if(x===0)ctx.moveTo(x,y);else ctx.lineTo(x,y)}ctx.stroke();ctx.fillStyle='#5dade244';ctx.fillText('D',5,5*h/6-18);
+  if(sv>0.7&&currentData){ctx.strokeStyle='rgba(255,0,77,0.15)';ctx.lineWidth=0.5;ctx.beginPath();for(let x=0;x<w;x+=4){const sp=Math.sin(x*0.1+t*5)*sv*12;ctx.moveTo(x,h/2);ctx.lineTo(x,h/2+sp)}ctx.stroke()}
+};
+
+// === ANIMATION LOOP (delta-time per R2) ===
+const animate = function(now) {
+  const dt=(now-lastFrameTime)/1000;
+  lastFrameTime=now;
+  // Delta-time animation: t advances proportionally to real elapsed time
+  // Targets 60fps equivalent speed (0.05 per frame at 60fps = 3.0 per second)
+  t+=dt*3.0;
+
+  // FPS counter for debug overlay
+  frameCount++;fpsAccum+=dt;
+  if(fpsAccum>=1.0){metrics.fps=Math.round(frameCount/fpsAccum);frameCount=0;fpsAccum=0}
+
+  if(birthTime){
+    const hrs=(Date.now()-birthTime.getTime())/3600000;
+    document.getElementById('hoursAlive').textContent=hrs.toFixed(4);
+    if(Math.floor(t*20)%60===0){const rc=computeRecovery(currentFracture,hrs);updatePAD(rc.P,rc.A,rc.D)}
+  }
+
+  const renderStart=performance.now();
+  drawScan();drawWaves();
+  metrics.renderMs=Math.round((performance.now()-renderStart)*100)/100;
+
+  // Debug overlay (R1 observability)
+  const dbg=document.getElementById('debugOverlay');
+  if(dbg){dbg.textContent='FPS: '+metrics.fps+'\nRender: '+metrics.renderMs+'ms\nFracture: '+metrics.fractureMs+'ms\nPalette: '+metrics.paletteMs+'ms'}
+
+  animationId=requestAnimationFrame(animate);
+};
+
+// Start idle animation
+if(scanCtx&&waveCtx){lastFrameTime=performance.now();animate(lastFrameTime)}
+</script>
+</body>
+</html>

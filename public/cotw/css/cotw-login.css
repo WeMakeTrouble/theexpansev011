@@ -1,0 +1,288 @@
+/**
+ * ============================================================================
+ * cotw-login.css — Council of the Wise Login Styles (v010)
+ * ============================================================================
+ *
+ * PURPOSE
+ * -------
+ * Login page layout and form styling for COTW terminal authentication.
+ * Inherits terminal aesthetic from shared cms-styles.css design tokens.
+ *
+ * ARCHITECTURE
+ * ------------
+ * Uses @layer to avoid specificity conflicts with cms-styles.css.
+ * All custom properties reference tokens from :root in cms-styles.css.
+ *
+ * CLASS-BASED STATE TOGGLES (used by loginHandler.js)
+ * ----------------------------------------------------
+ *  .login-error--visible    Show error message region
+ *  .login-submit--loading   Dim submit button during request
+ *
+ * RESPONSIVE
+ * ----------
+ *  Mobile-first. Login container adapts to viewport.
+ *  Max-width capped at 400px for desktop.
+ *
+ * ACCESSIBILITY
+ * -------------
+ *  - Error region visible only via class toggle (not inline style)
+ *  - Focus-visible outlines on all interactive elements
+ *  - Reduced motion respected
+ *  - High contrast maintained (WCAG 2.2 AA+ ratio on #000)
+ *
+ * ============================================================================
+ * Project: The Expanse v010
+ * Author: James (Project Manager)
+ * Date: February 13, 2026
+ * ============================================================================
+ */
+
+@layer components {
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Page Layout                                                        */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .login-page {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-block-size: 100vh;
+        min-block-size: 100dvh;
+        padding: var(--space-3xl);
+        background: var(--color-bg-primary);
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Login Container                                                    */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .login-container {
+        inline-size: 100%;
+        max-inline-size: 400px;
+        border: 2px solid var(--color-border-primary);
+        background: var(--color-bg-panel);
+        padding: var(--space-3xl);
+        box-shadow:
+            0 0 20px var(--color-glow),
+            inset 0 0 40px color-mix(in srgb, var(--color-brand) 3%, transparent);
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Header                                                             */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .login-header {
+        text-align: center;
+        margin-block-end: var(--space-3xl);
+        padding-block-end: var(--space-lg);
+        border-block-end: 1px solid var(--color-border-dim);
+    }
+
+    .login-title {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-lg);
+        color: var(--color-text-primary);
+        text-transform: uppercase;
+        letter-spacing: 0.15em;
+        margin: 0;
+        font-weight: normal;
+    }
+
+    .login-subtitle {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-sm);
+        color: var(--color-text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin: var(--space-sm) 0 0;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Form                                                               */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .login-form {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-lg);
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Fields                                                             */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .login-field {
+        display: flex;
+        flex-direction: column;
+        gap: var(--space-xs);
+    }
+
+    .login-label {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-xs);
+        color: var(--color-text-secondary);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+    }
+
+    .login-input {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-md);
+        color: var(--color-text-primary);
+        background: var(--color-bg-input);
+        border: 1px solid var(--color-border-primary);
+        padding: var(--space-md) var(--space-lg);
+        outline: none;
+        transition: border-color var(--motion-duration-fast) var(--motion-easing-default),
+                    box-shadow var(--motion-duration-fast) var(--motion-easing-default);
+    }
+
+    .login-input::placeholder {
+        color: var(--color-text-muted);
+        opacity: 1;
+    }
+
+    .login-input:focus-visible {
+        border-color: var(--color-brand);
+        box-shadow: 0 0 8px var(--color-glow);
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Error Message (class-toggled, accessible)                          */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .login-error {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-sm);
+        color: var(--color-accent-error);
+        padding: var(--space-sm) var(--space-md);
+        border-left: 2px solid var(--color-accent-error);
+        background: color-mix(in srgb, var(--color-accent-error) 8%, transparent);
+        display: none;
+    }
+
+    .login-error--visible {
+        display: block;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Submit Button                                                      */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .login-submit {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-md);
+        color: var(--color-text-primary);
+        background: color-mix(in srgb, var(--color-brand) 10%, transparent);
+        border: 2px solid var(--color-brand);
+        padding: var(--space-md) var(--space-lg);
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-block-start: var(--space-md);
+        transition: background var(--motion-duration-fast) var(--motion-easing-default),
+                    box-shadow var(--motion-duration-fast) var(--motion-easing-default),
+                    opacity var(--motion-duration-fast) var(--motion-easing-default);
+    }
+
+    .login-submit:hover {
+        background: color-mix(in srgb, var(--color-brand) 20%, transparent);
+        box-shadow: 0 0 12px var(--color-glow);
+    }
+
+    .login-submit:focus-visible {
+        outline: 2px solid var(--color-brand);
+        outline-offset: 2px;
+        box-shadow: 0 0 12px var(--color-glow);
+    }
+
+    .login-submit:active {
+        background: color-mix(in srgb, var(--color-brand) 30%, transparent);
+    }
+
+    .login-submit:disabled {
+        cursor: not-allowed;
+        opacity: 0.5;
+    }
+
+    .login-submit--loading {
+        opacity: 0.6;
+        cursor: wait;
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Reduced Motion                                                     */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    @media (prefers-reduced-motion: reduce) {
+        .login-input,
+        .login-submit {
+            transition: none;
+        }
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Responsive — Small Screens                                         */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    @media (max-inline-size: 480px) {
+        .login-page {
+            padding: var(--space-lg);
+            align-items: flex-start;
+            padding-block-start: 15vh;
+        }
+
+        .login-container {
+            max-inline-size: none;
+            border-inline: none;
+        }
+
+        .login-title {
+            font-size: var(--font-size-md);
+        }
+    }
+
+    /* ──────────────────────────────────────────────────────────────────── */
+    /*  Register Page Additions                                             */
+    /* ──────────────────────────────────────────────────────────────────── */
+
+    .login-label-optional {
+        color: var(--color-text-muted);
+        font-size: var(--font-size-xs);
+        text-transform: none;
+        letter-spacing: 0;
+    }
+
+    .login-field-hint {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-xs);
+        color: var(--color-text-muted);
+        letter-spacing: 0.05em;
+    }
+
+    .login-nav-hint {
+        font-family: var(--font-mono);
+        font-size: var(--font-size-xs);
+        color: var(--color-text-muted);
+        text-align: center;
+        margin-block-start: var(--space-xl);
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+
+    .login-nav-link {
+        color: var(--color-brand);
+        text-decoration: none;
+        transition: opacity var(--motion-duration-fast) var(--motion-easing-default);
+    }
+
+    .login-nav-link:hover {
+        opacity: 0.75;
+    }
+
+    .login-nav-link:focus-visible {
+        outline: 2px solid var(--color-brand);
+        outline-offset: 2px;
+    }
+}

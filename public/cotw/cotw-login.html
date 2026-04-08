@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<!--
+ ============================================================================
+ The Expanse v010 — Council of the Wise Login
+ ============================================================================
+
+ WHAT THIS FILE IS:
+ ---------------------------------------------------------------------------
+ Authentication gateway for The Expanse terminal experience.
+ Users enter credentials, POST to /auth/login, and redirect to the
+ four-panel COTW Dossier terminal on success.
+
+ ARCHITECTURE:
+ ---------------------------------------------------------------------------
+ - Vanilla JavaScript, no frameworks
+ - Terminal aesthetic (#00ff75 on black, cold-war instrument design)
+ - No inline scripts or styles (hardened CSP)
+ - ARIA landmarks, WCAG 2.2 AA+ compliant
+ - ES module loaded via loginHandler.js
+
+ FLOW:
+ ---------------------------------------------------------------------------
+ 1. Page load → check /auth/check → redirect if already authenticated
+ 2. User enters username + password
+ 3. Form submit → POST /auth/login (via loginHandler.js)
+ 4. Success → redirect to /cotw/cotw-dossier.html
+ 5. Failure → error message with screen reader announcement
+
+ DEPENDENCIES:
+ ---------------------------------------------------------------------------
+ - css/cms-styles.css     Shared terminal aesthetic (reused from CMS)
+ - js/loginHandler.js     Login form controller
+
+ SECURITY:
+ ---------------------------------------------------------------------------
+ - CSP: default-src 'self', script-src 'self', no inline
+ - Referrer-Policy: strict-origin-when-cross-origin
+ - No inline scripts, no inline styles
+ - Input autocomplete disabled, spellcheck disabled
+ - form-action restricted to 'self'
+
+ ============================================================================
+ Project: The Expanse v010
+ Author: James (Project Manager)
+ Date: February 13, 2026
+ ============================================================================
+-->
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self';
+        connect-src 'self';
+        img-src 'self' data:;
+        font-src 'self';
+        object-src 'none';
+        base-uri 'self';
+        frame-ancestors 'none';
+        form-action 'self';
+    ">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="The Expanse v010 — Council of the Wise Authentication">
+
+    <title>The Expanse — Login</title>
+
+    <!-- Resource hints -->
+    <link rel="preload" href="/cms/css/cms-styles.css" as="style">
+    <link rel="modulepreload" href="js/loginHandler.js">
+
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="/cms/css/cms-styles.css">
+    <link rel="stylesheet" href="css/cotw-login.css">
+</head>
+<body>
+    <!-- Skip to main content for keyboard / screen reader users -->
+    <a href="#login-username" class="sr-only" id="skip-link">Skip to login</a>
+
+    <noscript>
+        <div style="background:#000;color:#00ff75;padding:40px;font-family:monospace;text-align:center;">
+            <p>The Expanse requires JavaScript to operate.</p>
+            <p>Please enable JavaScript and reload the page.</p>
+        </div>
+    </noscript>
+
+    <main class="login-page" aria-label="Authentication">
+        <div class="login-container" data-testid="login-container">
+
+            <header class="login-header">
+                <h1 class="login-title">Council of the Wise</h1>
+                <p class="login-subtitle">Terminal Authentication</p>
+            </header>
+
+            <form
+                id="login-form"
+                class="login-form"
+                data-testid="login-form"
+                novalidate
+            >
+                <div class="login-field">
+                    <label for="login-username" class="login-label">Username</label>
+                    <input
+                        type="text"
+                        id="login-username"
+                        class="login-input"
+                        data-testid="login-username"
+                        placeholder="USERNAME"
+                        autocomplete="off"
+                        spellcheck="false"
+                        autofocus
+                        required
+                        aria-required="true"
+                        aria-describedby="error-message"
+                    >
+                </div>
+
+                <div class="login-field">
+                    <label for="login-password" class="login-label">Password</label>
+                    <input
+                        type="password"
+                        id="login-password"
+                        class="login-input"
+                        data-testid="login-password"
+                        placeholder="PASSWORD"
+                        autocomplete="off"
+                        required
+                        aria-required="true"
+                        aria-describedby="error-message"
+                    >
+                </div>
+
+                <div
+                    id="error-message"
+                    class="login-error"
+                    role="alert"
+                    aria-live="assertive"
+                    aria-hidden="true"
+                    data-testid="login-error"
+                ></div>
+
+                <button
+                    type="submit"
+                    class="login-submit"
+                    data-testid="login-submit"
+                    aria-busy="false"
+                >AUTHENTICATE</button>
+            </form>
+
+        </div>
+    </main>
+
+    <!-- Login JS module -->
+    <script type="module" src="js/loginHandler.js" fetchpriority="high"></script>
+
+</body>
+</html>

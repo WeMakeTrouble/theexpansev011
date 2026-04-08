@@ -1,0 +1,1635 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tanuki Trebuchet — Ballistics Lab</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif&display=swap');
+  
+  :root {
+    --accent: #d4956a;
+    --accent-bright: #e8a87c;
+    --bg-dark: #0b0c10;
+    --bg-panel: rgba(14, 15, 20, 0.92);
+    --border: rgba(255, 255, 255, 0.07);
+    --text: #e0ddd5;
+    --text-dim: rgba(255, 255, 255, 0.4);
+    --danger: #e86464;
+    --success: #64c882;
+    --warn: #e8c264;
+  }
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    background: var(--bg-dark);
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'DM Sans', sans-serif;
+    user-select: none;
+    color: var(--text);
+    touch-action: none;
+  }
+  
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+  
+  #ui-layer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+  
+  .panel {
+    position: absolute;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+    backdrop-filter: blur(16px);
+    pointer-events: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  
+  #controls {
+    top: 16px;
+    left: 16px;
+    width: 270px;
+  }
+  
+  #telemetry {
+    top: 16px;
+    right: 16px;
+    width: 215px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  
+  #instructions {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: rgba(255, 255, 255, 0.3);
+    font-size: 11px;
+    pointer-events: none;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+  }
+  
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 17px;
+    font-weight: 400;
+    color: #f0ece4;
+    margin-bottom: 14px;
+    letter-spacing: 0.3px;
+  }
+  
+  .control-group { margin-bottom: 12px; }
+  .control-group:last-child { margin-bottom: 0; }
+  
+  label {
+    display: block;
+    font-size: 10px;
+    color: var(--text-dim);
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.7px;
+    font-weight: 500;
+  }
+  
+  input[type="range"] {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    background: var(--accent);
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid var(--bg-dark);
+    transition: transform 0.1s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover { transform: scale(1.1); }
+  
+  .value-display {
+    float: right;
+    color: var(--accent);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  
+  .btn-row { display: flex; gap: 8px; margin-top: 6px; }
+  
+  button {
+    flex: 1;
+    padding: 10px 12px;
+    background: var(--accent);
+    color: var(--bg-dark);
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.12s;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  button:hover { background: var(--accent-bright); }
+  button:active { transform: scale(0.97); }
+  button:disabled {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.2);
+    cursor: not-allowed;
+    transform: none;
+  }
+  button.secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.5);
+  }
+  button.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .metric {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 6px;
+    color: var(--text-dim);
+    font-size: 11px;
+  }
+  .metric:last-child { margin-bottom: 0; }
+  .metric-value { color: #c8c4bc; font-weight: 500; }
+  .metric-value.hl { color: var(--accent); }
+  .metric-value.warn { color: var(--warn); }
+  
+  .divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.04);
+    margin: 8px 0;
+  }
+  
+  #status {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 6px 18px;
+    background: rgba(212, 149, 106, 0.12);
+    border: 1px solid rgba(212, 149, 106, 0.2);
+    border-radius: 20px;
+    color: var(--accent);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-family: 'JetBrains Mono', monospace;
+    pointer-events: none;
+  }
+  #status.visible { opacity: 1; }
+  #status.firing { background: rgba(232,100,100,0.12); border-color: rgba(232,100,100,0.2); color: var(--danger); }
+  #status.landed { background: rgba(100,200,130,0.12); border-color: rgba(100,200,130,0.2); color: var(--success); }
+  
+  #score-popup {
+    position: absolute;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 24px;
+    font-weight: 700;
+    color: var(--accent);
+    pointer-events: none;
+    opacity: 0;
+    transform: translate(-50%, -50%);
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+  }
+  #score-popup.show {
+    animation: scoreFloat 1.2s ease-out forwards;
+  }
+  
+  @keyframes scoreFloat {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(0.5); }
+    20% { opacity: 1; transform: translate(-50%, -50%) scale(1.1); }
+    100% { opacity: 0; transform: translate(-50%, -150%) scale(1); }
+  }
+  
+  @media (max-width: 700px) {
+    #controls { width: 220px; left: 8px; top: 8px; padding: 12px; }
+    #telemetry { width: 170px; right: 8px; top: 8px; padding: 12px; font-size: 10px; }
+    h1 { font-size: 14px; margin-bottom: 10px; }
+    button { padding: 8px 10px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="ui-layer">
+  <div id="status">Ready</div>
+  <div id="score-popup">+1000</div>
+  
+  <div id="controls" class="panel">
+    <h1>Trebuchet Controls</h1>
+    
+    <div class="control-group">
+      <label>Counterweight <span class="value-display" id="val-mass">2000 kg</span></label>
+      <input type="range" id="mass" min="500" max="5000" value="2000" step="100">
+    </div>
+    <div class="control-group">
+      <label>Projectile <span class="value-display" id="val-proj">15 kg</span></label>
+      <input type="range" id="proj-mass" min="5" max="100" value="15" step="5">
+    </div>
+    <div class="control-group">
+      <label>Arm Ratio <span class="value-display" id="val-ratio">4.0 : 1</span></label>
+      <input type="range" id="ratio" min="2.5" max="6" value="4" step="0.1">
+    </div>
+    <div class="control-group">
+      <label>Sling Length <span class="value-display" id="val-sling">6.0 m</span></label>
+      <input type="range" id="sling" min="3" max="12" value="6" step="0.5">
+    </div>
+    <div class="control-group">
+      <label>Release Angle <span class="value-display" id="val-release">42°</span></label>
+      <input type="range" id="release-angle" min="25" max="65" value="42" step="1">
+    </div>
+    
+    <div class="btn-row">
+      <button id="fire-btn">🔥 Fire</button>
+      <button id="reset-btn" class="secondary">↺ Reset</button>
+    </div>
+  </div>
+  
+  <div id="telemetry" class="panel">
+    <h1>Telemetry</h1>
+    <div class="metric">Phase <span class="metric-value" id="tel-phase">Ready</span></div>
+    <div class="metric">Time <span class="metric-value" id="tel-time">0.00 s</span></div>
+    <hr class="divider">
+    <div class="metric">Arm ω <span class="metric-value" id="tel-arm-vel">0°/s</span></div>
+    <div class="metric">Sling T <span class="metric-value" id="tel-tension">0 kN</span></div>
+    <div class="metric">Speed <span class="metric-value hl" id="tel-proj-vel">0 m/s</span></div>
+    <div class="metric">Altitude <span class="metric-value" id="tel-alt">0 m</span></div>
+    <hr class="divider">
+    <div class="metric">Range <span class="metric-value hl" id="tel-range">—</span></div>
+    <div class="metric">Peak <span class="metric-value" id="tel-max-h">—</span></div>
+    <div class="metric">Efficiency <span class="metric-value warn" id="tel-eff">—</span></div>
+    <div class="metric">Score <span class="metric-value hl" id="tel-score">0</span></div>
+  </div>
+  
+  <div id="instructions">
+    Drag to pan · Scroll to zoom · Click ground to place targets
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+"use strict";
+
+// ================================================================
+// CONFIGURATION
+// ================================================================
+
+const CONFIG = {
+  GRAVITY: 9.81,
+  PPM: 3.5,
+  FIXED_DT: 1 / 120, // 120Hz physics
+  MAX_STEPS: 8,
+  ARCADE_BOOST: 1.08,
+  MAX_TRAIL: 300,
+  MAX_PARTICLES: 200,
+  CAMERA_SMOOTH: 0.05,
+  SHAKE_DECAY: 0.9,
+  SLOW_MO_FACTOR: 0.3,
+  SLOW_MO_DURATION: 0.15,
+};
+
+// ================================================================
+// VECTOR MATH
+// ================================================================
+
+class Vec2 {
+  constructor(x = 0, y = 0) {
+    this.x = x;
+    this.y = y;
+  }
+  set(x, y) { this.x = x; this.y = y; return this; }
+  copy(v) { this.x = v.x; this.y = v.y; return this; }
+  clone() { return new Vec2(this.x, this.y); }
+  add(v) { this.x += v.x; this.y += v.y; return this; }
+  sub(v) { this.x -= v.x; this.y -= v.y; return this; }
+  mul(s) { this.x *= s; this.y *= s; return this; }
+  len() { return Math.sqrt(this.x * this.x + this.y * this.y); }
+}
+
+// ================================================================
+// OBJECT POOLS
+// ================================================================
+
+class Pool {
+  constructor(factory, maxSize) {
+    this.items = [];
+    this.active = [];
+    this.factory = factory;
+    this.maxSize = maxSize;
+    for (let i = 0; i < maxSize; i++) {
+      this.items.push(factory());
+      this.active.push(false);
+    }
+  }
+  
+  acquire() {
+    for (let i = 0; i < this.maxSize; i++) {
+      if (!this.active[i]) {
+        this.active[i] = true;
+        return this.items[i];
+      }
+    }
+    return null;
+  }
+  
+  release(item) {
+    const idx = this.items.indexOf(item);
+    if (idx >= 0) this.active[idx] = false;
+  }
+  
+  forEach(fn) {
+    for (let i = 0; i < this.maxSize; i++) {
+      if (this.active[i]) fn(this.items[i], i);
+    }
+  }
+  
+  clear() {
+    for (let i = 0; i < this.maxSize; i++) this.active[i] = false;
+  }
+}
+
+const particlePool = new Pool(() => ({
+  x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 1, size: 0.2,
+  r: 200, g: 180, b: 160, gravityScale: 1
+}), CONFIG.MAX_PARTICLES);
+
+const trailPool = new Pool(() => ({ x: 0, y: 0, t: 0, v: 0 }), CONFIG.MAX_TRAIL);
+
+// ================================================================
+// CAMERA
+// ================================================================
+
+class Camera {
+  constructor() {
+    this.x = 0;
+    this.y = 0;
+    this.zoom = 1;
+    this.targetX = 0;
+    this.targetY = 0;
+    this.targetZoom = 1;
+    this.shakeX = 0;
+    this.shakeY = 0;
+    this.shakeIntensity = 0;
+  }
+  
+  worldToScreen(wx, wy) {
+    return {
+      x: wx * CONFIG.PPM * this.zoom + this.x + this.shakeX,
+      y: window.innerHeight - (wy * CONFIG.PPM * this.zoom + this.y) + this.shakeY
+    };
+  }
+  
+  screenToWorld(sx, sy) {
+    return {
+      x: (sx - this.x - this.shakeX) / (CONFIG.PPM * this.zoom),
+      y: (window.innerHeight - sy - this.shakeY - this.y) / (CONFIG.PPM * this.zoom)
+    };
+  }
+  
+  addShake(amount) {
+    this.shakeIntensity = Math.min(20, this.shakeIntensity + amount);
+  }
+  
+  update() {
+    this.x += (this.targetX - this.x) * CONFIG.CAMERA_SMOOTH;
+    this.y += (this.targetY - this.y) * CONFIG.CAMERA_SMOOTH;
+    this.zoom += (this.targetZoom - this.zoom) * CONFIG.CAMERA_SMOOTH;
+    this.zoom = Math.max(0.12, Math.min(2.5, this.zoom));
+    
+    if (this.shakeIntensity > 0.1) {
+      this.shakeX = (Math.random() - 0.5) * this.shakeIntensity;
+      this.shakeY = (Math.random() - 0.5) * this.shakeIntensity;
+      this.shakeIntensity *= CONFIG.SHAKE_DECAY;
+    } else {
+      this.shakeX = 0;
+      this.shakeY = 0;
+    }
+  }
+}
+
+// ================================================================
+// TREBUCHET
+// ================================================================
+
+class Trebuchet {
+  constructor() {
+    this.params = {
+      cwMass: 2000,
+      projMass: 15,
+      armMass: 80,
+      armLong: 8,
+      armShort: 2,
+      slingLen: 6,
+      pivotH: 6,
+      cwHang: 2,
+      releaseAngle: 42 * Math.PI / 180
+    };
+    
+    this.reset();
+  }
+  
+  reset() {
+    // armAngle: 0 = vertical up, positive = CW side down (cocked)
+    this.armAngle = Math.PI * 0.42; // ~76 degrees cocked
+    this.armOmega = 0;
+    this.slingAngle = -0.3; // Relative to arm
+    this.slingOmega = 0;
+    this.cwAngle = 0;
+    this.cwOmega = 0;
+    this.released = false;
+    this.projX = 0;
+    this.projY = 0;
+    this.projVx = 0;
+    this.projVy = 0;
+    this.time = 0;
+    this.tension = 0;
+    this.phase = 'ready';
+    this.trailTimer = 0;
+    this.maxHeight = 0;
+  }
+  
+  getGeometry() {
+    const pivX = 0;
+    const pivY = this.params.pivotH;
+    const a = this.armAngle;
+    
+    // Long arm tip (projectile side)
+    const tipX = pivX + this.params.armLong * Math.sin(a);
+    const tipY = pivY - this.params.armLong * Math.cos(a);
+    
+    // Short arm end (CW side)
+    const baseX = pivX - this.params.armShort * Math.sin(a);
+    const baseY = pivY + this.params.armShort * Math.cos(a);
+    
+    // CW position
+    const cwX = baseX + this.params.cwHang * Math.sin(this.cwAngle);
+    const cwY = baseY - this.params.cwHang * Math.cos(this.cwAngle);
+    
+    // Projectile position
+    let projX, projY;
+    if (!this.released) {
+      const slingA = a + this.slingAngle;
+      projX = tipX + this.params.slingLen * Math.sin(slingA);
+      projY = tipY - this.params.slingLen * Math.cos(slingA);
+    } else {
+      projX = this.projX;
+      projY = this.projY;
+    }
+    
+    return { pivX, pivY, tipX, tipY, baseX, baseY, cwX, cwY, projX, projY };
+  }
+  
+  step(dt) {
+    if (this.phase === 'ready' || this.phase === 'landed') return null;
+    
+    const p = this.params;
+    const steps = 4;
+    const subDt = dt / steps;
+    let result = null;
+    
+    for (let step = 0; step < steps; step++) {
+      // === LAUNCH PHASE ===
+      if (this.phase === 'firing' && !this.released) {
+        // Physics calculations
+        const theta = this.armAngle;
+        const thetaDot = this.armOmega;
+        const phi = this.slingAngle;
+        const phiDot = this.slingOmega;
+        const psi = this.cwAngle;
+        
+        const L1 = p.armLong;
+        const L2 = p.armShort;
+        const Ls = p.slingLen;
+        const Lc = p.cwHang;
+        const Mcw = p.cwMass;
+        const Mp = p.projMass;
+        const Ma = p.armMass;
+        
+        // Arm moment of inertia
+        const cmOff = (L1 - L2) / 2;
+        const totalLen = L1 + L2;
+        const Iarm = (Ma * totalLen * totalLen / 12) + Ma * cmOff * cmOff;
+        
+        // Torques
+        const tauArmGrav = -Ma * CONFIG.GRAVITY * cmOff * Math.sin(theta);
+        const tauCW = Mcw * CONFIG.GRAVITY * L2 * Math.sin(theta);
+        const tauProj = -Mp * CONFIG.GRAVITY * L1 * Math.sin(theta) 
+                       - Mp * CONFIG.GRAVITY * Ls * Math.sin(theta + phi);
+        
+        const Iproj = Mp * (L1 * L1 + Ls * Ls + 2 * L1 * Ls * Math.cos(phi));
+        const Itotal = Iarm + Mcw * L2 * L2 + Iproj;
+        
+        const thetaDDot = (tauArmGrav + tauCW + tauProj) / Itotal;
+        
+        // CW pendulum
+        const psiDDot = -(CONFIG.GRAVITY / Lc) * Math.sin(psi) 
+                       + (L2 / Lc) * thetaDDot * Math.cos(psi - theta) * 0.25;
+        
+        // Sling dynamics
+        const totalA = theta + phi;
+        const gPerp = -(CONFIG.GRAVITY / Ls) * Math.sin(totalA);
+        const centripetal = (L1 * thetaDot * thetaDot / Ls) * Math.sin(phi);
+        const coriolis = -2 * thetaDot * phiDot;
+        const coupling = -(L1 / Ls) * thetaDDot * Math.cos(phi);
+        const whip = Math.pow(Math.abs(thetaDot), 1.3) * 0.012 * Math.sign(phiDot || 1);
+        
+        const phiDDot = gPerp + centripetal + coriolis + coupling * 0.5 + whip;
+        
+        const totalOmega = thetaDot + phiDot;
+        this.tension = Mp * (CONFIG.GRAVITY * Math.cos(totalA) + Ls * totalOmega * totalOmega);
+        
+        // Integrate
+        this.armOmega += thetaDDot * subDt;
+        this.slingOmega += phiDDot * subDt;
+        this.cwOmega += psiDDot * subDt;
+        
+        this.armAngle += this.armOmega * subDt;
+        this.slingAngle += this.slingOmega * subDt;
+        this.cwAngle += this.cwOmega * subDt;
+        
+        // Damping
+        this.armOmega *= 0.9999;
+        this.slingOmega *= 0.9997;
+        this.cwOmega *= 0.9992;
+        
+        // Check release
+        const angleFromHoriz = Math.PI / 2 - totalA;
+        const inWindow = Math.abs(angleFromHoriz - p.releaseAngle) < 0.08;
+        const moving = Math.abs(this.armOmega) > 0.5;
+        
+        if ((inWindow && moving && this.time > 0.05) || 
+            (this.armAngle < -Math.PI * 0.35 && this.time > 0.05)) {
+          result = this.release();
+        }
+      }
+      
+      // === FREE FLIGHT ===
+      if (this.released && this.phase !== 'landed') {
+        // Cinematic gravity
+        const gEff = this.projVy > 0 ? CONFIG.GRAVITY * 0.85 : CONFIG.GRAVITY * 1.2;
+        
+        const speed = Math.sqrt(this.projVx * this.projVx + this.projVy * this.projVy);
+        if (speed > 0.1) {
+          const drag = 0.00015 * speed * speed;
+          this.projVx -= (drag * this.projVx / speed) * subDt;
+          this.projVy -= (drag * this.projVy / speed) * subDt;
+        }
+        
+        this.projVy -= gEff * subDt;
+        this.projX += this.projVx * subDt;
+        this.projY += this.projVy * subDt;
+        
+        if (this.projY > this.maxHeight) this.maxHeight = this.projY;
+        
+        // Trail
+        this.trailTimer += subDt;
+        if (this.trailTimer > 0.02) {
+          this.trailTimer = 0;
+          const t = trailPool.acquire();
+          if (t) {
+            t.x = this.projX;
+            t.y = this.projY;
+            t.t = this.time;
+            t.v = speed;
+          }
+        }
+        
+        // Ground hit
+        if (this.projY <= 0 && this.projVy < 0) {
+          this.projY = 0;
+          const impactSpeed = Math.sqrt(this.projVx * this.projVx + this.projVy * this.projVy);
+          
+          this.projVy *= -0.3;
+          this.projVx *= 0.5;
+          
+          if (impactSpeed > 2) {
+            result = { type: 'impact', x: this.projX, speed: impactSpeed };
+          }
+          
+          if (Math.sqrt(this.projVx * this.projVx + this.projVy * this.projVy) < 0.8) {
+            this.phase = 'landed';
+            result = { type: 'landed', x: this.projX, maxHeight: this.maxHeight };
+          }
+        }
+        
+        // Bounds
+        if (this.projX > 3000 || this.projY < -100) {
+          this.phase = 'landed';
+        }
+      }
+      
+      // Post-release arm motion
+      if (this.released && this.phase === 'firing') {
+        this.armOmega *= 0.97;
+        this.armAngle += this.armOmega * subDt;
+        this.cwOmega *= 0.97;
+        this.cwAngle += this.cwOmega * subDt;
+        
+        if (this.time > 0.5) this.phase = 'flying';
+      }
+      
+      this.time += subDt;
+    }
+    
+    return result;
+  }
+  
+  release() {
+    const geo = this.getGeometry();
+    
+    // Calculate release velocity
+    const vTipX = this.armOmega * this.params.armLong * Math.cos(this.armAngle);
+    const vTipY = this.armOmega * this.params.armLong * Math.sin(this.armAngle);
+    
+    const totalA = this.armAngle + this.slingAngle;
+    const totalOmega = this.armOmega + this.slingOmega;
+    const vSlingX = totalOmega * this.params.slingLen * Math.cos(totalA);
+    const vSlingY = totalOmega * this.params.slingLen * Math.sin(totalA);
+    
+    this.released = true;
+    this.projX = geo.projX;
+    this.projY = Math.max(0.5, geo.projY);
+    this.projVx = (vTipX + vSlingX) * CONFIG.ARCADE_BOOST;
+    this.projVy = (vTipY + vSlingY) * CONFIG.ARCADE_BOOST;
+    
+    // Fallback if velocity is bad
+    const speed = Math.sqrt(this.projVx * this.projVx + this.projVy * this.projVy);
+    if (speed < 5 || this.projVx < 0) {
+      const hDrop = this.params.cwHang + this.params.armShort * (1 - Math.cos(this.armAngle));
+      const vEst = Math.sqrt(2 * this.params.cwMass * CONFIG.GRAVITY * hDrop * 0.5 / this.params.projMass);
+      this.projVx = vEst * Math.cos(this.params.releaseAngle) * CONFIG.ARCADE_BOOST;
+      this.projVy = vEst * Math.sin(this.params.releaseAngle) * CONFIG.ARCADE_BOOST;
+    }
+    
+    const launchSpeed = Math.sqrt(this.projVx * this.projVx + this.projVy * this.projVy);
+    
+    // Predict range for camera
+    const launchAngle = Math.atan2(this.projVy, this.projVx);
+    const range = (launchSpeed * launchSpeed * Math.sin(2 * launchAngle)) / CONFIG.GRAVITY;
+    
+    return { 
+      type: 'launch', 
+      speed: launchSpeed, 
+      range: range,
+      x: this.projX,
+      y: this.projY
+    };
+  }
+  
+  fire() {
+    if (this.phase !== 'ready') return false;
+    
+    this.phase = 'firing';
+    this.time = 0;
+    this.armAngle = Math.PI * 0.42;
+    this.armOmega = 0;
+    this.slingAngle = -0.3;
+    this.slingOmega = 0;
+    this.cwAngle = 0;
+    this.cwOmega = 0;
+    this.released = false;
+    this.projX = 0;
+    this.projY = 0;
+    this.projVx = 0;
+    this.projVy = 0;
+    this.maxHeight = 0;
+    trailPool.clear();
+    
+    return true;
+  }
+}
+
+// ================================================================
+// TARGETS
+// ================================================================
+
+class Target {
+  constructor(x) {
+    this.x = x;
+    this.w = 2.5;
+    this.h = 2 + Math.random() * 3;
+    this.hit = false;
+    this.flash = 0;
+    this.health = Math.floor(this.h * 2);
+    this.maxHealth = this.health;
+  }
+  
+  damage(amount) {
+    this.health -= amount;
+    this.flash = 1;
+    if (this.health <= 0) {
+      this.hit = true;
+      return true;
+    }
+    return false;
+  }
+}
+
+// ================================================================
+// RENDERER
+// ================================================================
+
+class Renderer {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext('2d');
+    this.dpr = 1;
+    this.stars = [];
+    this.resize();
+    this.initStars();
+  }
+  
+  resize() {
+    this.dpr = window.devicePixelRatio || 1;
+    this.W = window.innerWidth;
+    this.H = window.innerHeight;
+    this.canvas.width = this.W * this.dpr;
+    this.canvas.height = this.H * this.dpr;
+    this.canvas.style.width = this.W + 'px';
+    this.canvas.style.height = this.H + 'px';
+    this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+  }
+  
+  initStars() {
+    for (let i = 0; i < 80; i++) {
+      this.stars.push({
+        x: Math.random(),
+        y: Math.random() * 0.6,
+        r: Math.random() * 1.2 + 0.3,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+  }
+  
+  clear() {
+    this.ctx.clearRect(0, 0, this.W, this.H);
+  }
+  
+  drawSky(time, camera) {
+    const grad = this.ctx.createLinearGradient(0, 0, 0, this.H);
+    grad.addColorStop(0, '#0b0c10');
+    grad.addColorStop(0.35, '#10111a');
+    grad.addColorStop(0.65, '#1a1b24');
+    grad.addColorStop(1, '#1f1a14');
+    this.ctx.fillStyle = grad;
+    this.ctx.fillRect(0, 0, this.W, this.H);
+    
+    this.ctx.fillStyle = 'rgba(255,250,240,0.35)';
+    for (const s of this.stars) {
+      const flicker = 0.3 + 0.2 * Math.sin(s.phase + time * 0.5);
+      this.ctx.globalAlpha = flicker;
+      this.ctx.beginPath();
+      this.ctx.arc(s.x * this.W, s.y * this.H, s.r, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    this.ctx.globalAlpha = 1;
+  }
+  
+  drawGrid(camera) {
+    const interval = camera.zoom > 0.5 ? 50 : camera.zoom > 0.25 ? 100 : 200;
+    
+    this.ctx.strokeStyle = 'rgba(255,255,255,0.02)';
+    this.ctx.lineWidth = 1;
+    this.ctx.beginPath();
+    
+    for (let x = 0; x <= 2500; x += interval) {
+      const p = camera.worldToScreen(x, 0);
+      if (p.x < -50 || p.x > this.W + 50) continue;
+      this.ctx.moveTo(p.x, 0);
+      this.ctx.lineTo(p.x, p.y);
+    }
+    this.ctx.stroke();
+    
+    this.ctx.fillStyle = 'rgba(255,255,255,0.15)';
+    this.ctx.font = '10px JetBrains Mono';
+    this.ctx.textAlign = 'center';
+    for (let x = 0; x <= 2500; x += interval) {
+      const p = camera.worldToScreen(x, 0);
+      if (p.x < -30 || p.x > this.W + 30) continue;
+      this.ctx.fillText(x + 'm', p.x, p.y + 14);
+    }
+  }
+  
+  drawGround(camera) {
+    const left = camera.worldToScreen(-100, 0);
+    const right = camera.worldToScreen(3000, 0);
+    
+    const grad = this.ctx.createLinearGradient(0, left.y - 2, 0, left.y + 80);
+    grad.addColorStop(0, '#3a4a28');
+    grad.addColorStop(0.03, '#2a3a1c');
+    grad.addColorStop(0.12, '#1e2814');
+    grad.addColorStop(1, '#0b0c10');
+    this.ctx.fillStyle = grad;
+    this.ctx.fillRect(0, left.y - 2, this.W, this.H - left.y + 10);
+    
+    this.ctx.strokeStyle = '#4a6a30';
+    this.ctx.lineWidth = 2;
+    this.ctx.beginPath();
+    this.ctx.moveTo(0, left.y);
+    this.ctx.lineTo(this.W, right.y);
+    this.ctx.stroke();
+  }
+  
+  drawTrebuchet(treb, camera) {
+    const geo = treb.getGeometry();
+    const z = camera.zoom;
+    
+    const piv = camera.worldToScreen(geo.pivX, geo.pivY);
+    const tip = camera.worldToScreen(geo.tipX, geo.tipY);
+    const base = camera.worldToScreen(geo.baseX, geo.baseY);
+    const cw = camera.worldToScreen(geo.cwX, geo.cwY);
+    const gnd = camera.worldToScreen(0, 0);
+    
+    const frameW = 3 * CONFIG.PPM * z;
+    
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    
+    // A-Frame legs
+    this.ctx.strokeStyle = '#3a2e22';
+    this.ctx.lineWidth = 6 * z;
+    this.ctx.beginPath();
+    this.ctx.moveTo(piv.x - frameW, gnd.y);
+    this.ctx.lineTo(piv.x, piv.y);
+    this.ctx.lineTo(piv.x + frameW, gnd.y);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = '#5a4a3a';
+    this.ctx.lineWidth = 4 * z;
+    this.ctx.beginPath();
+    this.ctx.moveTo(piv.x - frameW, gnd.y);
+    this.ctx.lineTo(piv.x, piv.y);
+    this.ctx.lineTo(piv.x + frameW, gnd.y);
+    this.ctx.stroke();
+    
+    // Cross brace
+    const braceY = gnd.y + (piv.y - gnd.y) * 0.35;
+    this.ctx.strokeStyle = '#4a3a2a';
+    this.ctx.lineWidth = 3 * z;
+    this.ctx.beginPath();
+    this.ctx.moveTo(piv.x - frameW * 0.55, braceY);
+    this.ctx.lineTo(piv.x + frameW * 0.55, braceY);
+    this.ctx.stroke();
+    
+    // Base
+    this.ctx.strokeStyle = '#4a3a2a';
+    this.ctx.lineWidth = 5 * z;
+    this.ctx.beginPath();
+    this.ctx.moveTo(piv.x - frameW * 1.1, gnd.y);
+    this.ctx.lineTo(piv.x + frameW * 1.1, gnd.y);
+    this.ctx.stroke();
+    
+    // Arm (3 layers)
+    this.ctx.strokeStyle = '#5a4434';
+    this.ctx.lineWidth = 8 * z;
+    this.ctx.beginPath();
+    this.ctx.moveTo(base.x, base.y);
+    this.ctx.lineTo(tip.x, tip.y);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = '#8b7355';
+    this.ctx.lineWidth = 5 * z;
+    this.ctx.beginPath();
+    this.ctx.moveTo(base.x, base.y);
+    this.ctx.lineTo(tip.x, tip.y);
+    this.ctx.stroke();
+    
+    this.ctx.strokeStyle = '#a08a6a';
+    this.ctx.lineWidth = 2 * z;
+    this.ctx.beginPath();
+    this.ctx.moveTo(base.x, base.y);
+    this.ctx.lineTo(tip.x, tip.y);
+    this.ctx.stroke();
+    
+    // Pivot pin
+    this.ctx.fillStyle = '#666';
+    this.ctx.beginPath();
+    this.ctx.arc(piv.x, piv.y, 5 * z, 0, Math.PI * 2);
+    this.ctx.fill();
+    this.ctx.fillStyle = '#999';
+    this.ctx.beginPath();
+    this.ctx.arc(piv.x, piv.y, 3 * z, 0, Math.PI * 2);
+    this.ctx.fill();
+    
+    // CW rope
+    this.ctx.strokeStyle = '#a08860';
+    this.ctx.lineWidth = 2 * z;
+    this.ctx.beginPath();
+    this.ctx.moveTo(base.x, base.y);
+    this.ctx.lineTo(cw.x, cw.y);
+    this.ctx.stroke();
+    
+    // Counterweight
+    const cwSize = (7 + Math.sqrt(treb.params.cwMass) * 0.22) * z;
+    
+    this.ctx.fillStyle = 'rgba(0,0,0,0.25)';
+    this.ctx.fillRect(cw.x - cwSize / 2 + 2, cw.y - cwSize / 2 + 2, cwSize, cwSize);
+    
+    const cwGrad = this.ctx.createLinearGradient(
+      cw.x - cwSize / 2, cw.y - cwSize / 2,
+      cw.x + cwSize / 2, cw.y + cwSize / 2
+    );
+    cwGrad.addColorStop(0, '#4a4a5a');
+    cwGrad.addColorStop(0.5, '#3a3a4a');
+    cwGrad.addColorStop(1, '#2a2a3a');
+    this.ctx.fillStyle = cwGrad;
+    this.ctx.fillRect(cw.x - cwSize / 2, cw.y - cwSize / 2, cwSize, cwSize);
+    
+    this.ctx.strokeStyle = '#5a5a6a';
+    this.ctx.lineWidth = 1.5 * z;
+    this.ctx.strokeRect(cw.x - cwSize / 2, cw.y - cwSize / 2, cwSize, cwSize);
+    
+    if (z > 0.45) {
+      this.ctx.fillStyle = 'rgba(255,255,255,0.25)';
+      this.ctx.font = `${Math.max(7, Math.round(8 * z))}px JetBrains Mono`;
+      this.ctx.textAlign = 'center';
+      this.ctx.fillText(treb.params.cwMass + 'kg', cw.x, cw.y + 3 * z);
+    }
+    
+    // Sling (only if not released)
+    if (!treb.released) {
+      const proj = camera.worldToScreen(geo.projX, geo.projY);
+      
+      this.ctx.strokeStyle = '#b09060';
+      this.ctx.lineWidth = 2 * z;
+      this.ctx.beginPath();
+      this.ctx.moveTo(tip.x, tip.y);
+      const midX = (tip.x + proj.x) / 2;
+      const midY = (tip.y + proj.y) / 2;
+      const sag = Math.max(0, -treb.slingAngle * 7 * z);
+      this.ctx.quadraticCurveTo(midX, midY + sag, proj.x, proj.y);
+      this.ctx.stroke();
+      
+      // Pouch
+      this.ctx.fillStyle = '#8b6914';
+      this.ctx.beginPath();
+      this.ctx.arc(proj.x, proj.y, 5 * z, 0, Math.PI * 2);
+      this.ctx.fill();
+      this.ctx.fillStyle = '#a07a1a';
+      this.ctx.beginPath();
+      this.ctx.arc(proj.x, proj.y, 3 * z, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+  }
+  
+  drawProjectile(treb, camera) {
+    if (!treb.released && treb.phase === 'ready') {
+      // Draw projectile in pouch
+      const geo = treb.getGeometry();
+      const pos = camera.worldToScreen(geo.projX, geo.projY);
+      this.drawBall(pos.x, pos.y, 4 * camera.zoom);
+      return;
+    }
+    
+    if (!treb.released) return;
+    
+    const pos = camera.worldToScreen(treb.projX, treb.projY);
+    const r = 4 * camera.zoom;
+    
+    // Trail
+    this.drawTrail(treb.time, camera);
+    
+    // Shadow
+    if (treb.projY > 0.5) {
+      const sh = camera.worldToScreen(treb.projX, 0);
+      const scale = Math.max(0, 1 - treb.projY / 100);
+      this.ctx.fillStyle = `rgba(0,0,0,${0.2 * scale})`;
+      this.ctx.beginPath();
+      this.ctx.ellipse(sh.x, sh.y, r * 3 * scale, r * 0.4 * scale, 0, 0, Math.PI * 2);
+      this.ctx.fill();
+    }
+    
+    // Ball
+    this.drawBall(pos.x, pos.y, r);
+    
+    // Motion blur
+    const speed = Math.sqrt(treb.projVx * treb.projVx + treb.projVy * treb.projVy);
+    if (speed > 15 && treb.phase !== 'landed') {
+      const blurLen = Math.min(speed * 0.08, 35) * camera.zoom;
+      const angle = Math.atan2(-treb.projVy, treb.projVx);
+      this.ctx.strokeStyle = `rgba(255,200,150,${Math.min(0.4, speed / 150)})`;
+      this.ctx.lineWidth = r * 1.8;
+      this.ctx.lineCap = 'round';
+      this.ctx.beginPath();
+      this.ctx.moveTo(pos.x, pos.y);
+      this.ctx.lineTo(pos.x - Math.cos(angle) * blurLen, pos.y + Math.sin(angle) * blurLen);
+      this.ctx.stroke();
+    }
+  }
+  
+  drawBall(x, y, r) {
+    const grad = this.ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.1, x, y, r);
+    grad.addColorStop(0, '#ffd8a0');
+    grad.addColorStop(0.5, '#d4713a');
+    grad.addColorStop(1, '#6b3010');
+    this.ctx.fillStyle = grad;
+    this.ctx.beginPath();
+    this.ctx.arc(x, y, r, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+  
+  drawTrail(now, camera) {
+    if (trailPool.items.length < 2) return;
+    
+    this.ctx.lineCap = 'round';
+    
+    for (let i = 1; i < trailPool.maxSize; i++) {
+      if (!trailPool.active[i] || !trailPool.active[i - 1]) continue;
+      
+      const t = trailPool.items[i];
+      const prev = trailPool.items[i - 1];
+      
+      const age = (now - t.t) / 5;
+      const alpha = Math.max(0, 1 - age) * 0.5;
+      if (alpha < 0.01) continue;
+      
+      const p0 = camera.worldToScreen(prev.x, prev.y);
+      const p1 = camera.worldToScreen(t.x, t.y);
+      const w = Math.max(1, (t.v / 50) * camera.zoom * 2);
+      
+      this.ctx.strokeStyle = `rgba(212,149,106,${alpha})`;
+      this.ctx.lineWidth = w;
+      this.ctx.beginPath();
+      this.ctx.moveTo(p0.x, p0.y);
+      this.ctx.lineTo(p1.x, p1.y);
+      this.ctx.stroke();
+    }
+  }
+  
+  drawTargets(targets, camera) {
+    for (const t of targets) {
+      const base = camera.worldToScreen(t.x, 0);
+      const top = camera.worldToScreen(t.x, t.h);
+      const w = t.w * CONFIG.PPM * camera.zoom;
+      const h = base.y - top.y;
+      
+      // Shadow
+      this.ctx.fillStyle = 'rgba(0,0,0,0.25)';
+      this.ctx.fillRect(base.x - w / 2 + 3, top.y + 3, w, h);
+      
+      // Health color
+      const healthRatio = t.hit ? 0 : t.health / t.maxHealth;
+      const r = Math.floor(107 + (1 - healthRatio) * 80);
+      const g = Math.floor(83 + (1 - healthRatio) * 40);
+      
+      const grad = this.ctx.createLinearGradient(base.x - w / 2, top.y, base.x + w / 2, base.y);
+      if (t.hit) {
+        grad.addColorStop(0, '#5a2020');
+        grad.addColorStop(0.5, '#4a1818');
+        grad.addColorStop(1, '#3a1010');
+      } else {
+        grad.addColorStop(0, `rgb(${r},${g},68)`);
+        grad.addColorStop(0.5, `rgb(${r+20},${g+20},78)`);
+        grad.addColorStop(1, `rgb(${r-20},${g-20},58)`);
+      }
+      
+      this.ctx.fillStyle = grad;
+      this.ctx.fillRect(base.x - w / 2, top.y, w, h);
+      
+      // Flash
+      if (t.flash > 0) {
+        this.ctx.fillStyle = `rgba(255,200,150,${t.flash * 0.6})`;
+        this.ctx.fillRect(base.x - w / 2, top.y, w, h);
+        t.flash *= 0.9;
+      }
+      
+      // Cracks
+      if (t.health < t.maxHealth && !t.hit) {
+        this.ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+        this.ctx.lineWidth = 1.5;
+        const cracks = Math.floor((1 - t.health / t.maxHealth) * 3) + 1;
+        for (let i = 0; i < cracks; i++) {
+          this.ctx.beginPath();
+          const cx = base.x + (Math.random() - 0.5) * w * 0.6;
+          const cy = top.y + Math.random() * h;
+          this.ctx.moveTo(cx, cy);
+          this.ctx.lineTo(cx + (Math.random() - 0.5) * w * 0.4, cy + Math.random() * h * 0.4);
+          this.ctx.stroke();
+        }
+      }
+      
+      // Outline
+      this.ctx.strokeStyle = t.hit ? 'rgba(232,100,100,0.4)' : 'rgba(80,60,40,0.5)';
+      this.ctx.lineWidth = 1.5;
+      this.ctx.strokeRect(base.x - w / 2, top.y, w, h);
+      
+      // Label
+      if (camera.zoom > 0.25) {
+        this.ctx.fillStyle = t.hit ? 'rgba(232,100,100,0.5)' : 'rgba(255,255,255,0.2)';
+        this.ctx.font = `${Math.max(8, Math.round(9 * camera.zoom))}px JetBrains Mono`;
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText(Math.round(t.x) + 'm', base.x, base.y + 14);
+      }
+    }
+  }
+  
+  drawParticles(camera) {
+    particlePool.forEach(p => {
+      const pos = camera.worldToScreen(p.x, p.y);
+      const r = Math.max(1, p.size * CONFIG.PPM * camera.zoom * (p.life / p.maxLife));
+      
+      this.ctx.globalAlpha = p.life / p.maxLife;
+      this.ctx.fillStyle = `rgb(${p.r},${p.g},${p.b})`;
+      this.ctx.beginPath();
+      this.ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+      this.ctx.fill();
+    });
+    this.ctx.globalAlpha = 1;
+  }
+  
+  drawTrajectoryPreview(treb, camera) {
+    if (treb.phase !== 'ready') return;
+    
+    // Estimate trajectory
+    const p = treb.params;
+    const hDrop = p.cwHang + p.armShort * (1 - Math.cos(treb.armAngle));
+    const vEst = Math.sqrt(2 * p.cwMass * CONFIG.GRAVITY * hDrop * 0.5 / p.projMass) * CONFIG.ARCADE_BOOST;
+    
+    const angle = p.releaseAngle;
+    let vx = vEst * Math.cos(angle);
+    let vy = vEst * Math.sin(angle);
+    
+    const geo = treb.getGeometry();
+    let x = geo.projX;
+    let y = Math.max(0.5, geo.projY);
+    
+    this.ctx.strokeStyle = 'rgba(212,149,106,0.15)';
+    this.ctx.lineWidth = 2;
+    this.ctx.setLineDash([5, 5]);
+    this.ctx.beginPath();
+    
+    const start = camera.worldToScreen(x, y);
+    this.ctx.moveTo(start.x, start.y);
+    
+    for (let i = 0; i < 200; i++) {
+      vy -= (vy > 0 ? CONFIG.GRAVITY * 0.85 : CONFIG.GRAVITY * 1.2) * 0.03;
+      x += vx * 0.03;
+      y += vy * 0.03;
+      if (y < 0) break;
+      const pos = camera.worldToScreen(x, y);
+      this.ctx.lineTo(pos.x, pos.y);
+    }
+    this.ctx.stroke();
+    this.ctx.setLineDash([]);
+    
+    // Landing marker
+    const range = (vEst * vEst * Math.sin(2 * angle)) / CONFIG.GRAVITY;
+    const end = camera.worldToScreen(range, 0);
+    this.ctx.fillStyle = 'rgba(212,149,106,0.3)';
+    this.ctx.beginPath();
+    this.ctx.arc(end.x, end.y, 4, 0, Math.PI * 2);
+    this.ctx.fill();
+  }
+}
+
+// ================================================================
+// GAME CONTROLLER
+// ================================================================
+
+class Game {
+  constructor() {
+    this.canvas = document.getElementById('canvas');
+    this.renderer = new Renderer(this.canvas);
+    this.camera = new Camera();
+    this.trebuchet = new Trebuchet();
+    this.targets = [];
+    this.score = 0;
+    this.slowMoTimer = 0;
+    this.accumulator = 0;
+    this.lastTime = 0;
+    
+    this.setupInput();
+    this.setupUI();
+    this.reset();
+    
+    // Default targets
+    this.addTarget(80);
+    this.addTarget(150);
+    this.addTarget(250);
+    this.addTarget(400);
+    
+    requestAnimationFrame(t => this.loop(t));
+  }
+  
+  reset() {
+    this.trebuchet.reset();
+    this.camera.x = this.W * 0.28;
+    this.camera.y = this.H * 0.72;
+    this.camera.targetX = this.camera.x;
+    this.camera.targetY = this.camera.y;
+    this.camera.targetZoom = 1;
+    this.camera.zoom = 1;
+    this.score = 0;
+    this.slowMoTimer = 0;
+    this.accumulator = 0;
+    
+    this.targets.forEach(t => {
+      t.hit = false;
+      t.health = t.maxHealth;
+      t.flash = 0;
+    });
+    
+    trailPool.clear();
+    particlePool.clear();
+    
+    this.updateUI();
+    this.setStatus('READY', '');
+    document.getElementById('fire-btn').disabled = false;
+    document.getElementById('tel-range').textContent = '—';
+    document.getElementById('tel-max-h').textContent = '—';
+    document.getElementById('tel-eff').textContent = '—';
+  }
+  
+  addTarget(x) {
+    this.targets.push(new Target(x));
+    this.updateUI();
+  }
+  
+  fire() {
+    if (this.trebuchet.fire()) {
+      document.getElementById('fire-btn').disabled = true;
+      this.setStatus('FIRING', 'firing');
+      this.accumulator = 0;
+    }
+  }
+  
+  handleEvent(evt) {
+    if (evt.type === 'launch') {
+      this.setStatus(`LAUNCHED — ${evt.speed.toFixed(0)} m/s`, 'firing');
+      
+      // Calculate efficiency
+      const p = this.trebuchet.params;
+      const hDrop = p.cwHang + p.armShort * (1 - Math.cos(this.trebuchet.armAngle));
+      const PE = p.cwMass * CONFIG.GRAVITY * hDrop;
+      const KE = 0.5 * p.projMass * evt.speed * evt.speed;
+      const eff = Math.min(99, (KE / PE) * 100);
+      
+      document.getElementById('tel-range').textContent = Math.round(evt.range) + ' m';
+      document.getElementById('tel-eff').textContent = eff.toFixed(1) + '%';
+      
+      // Camera follow
+      this.camera.targetZoom = Math.max(0.2, Math.min(0.6, 200 / Math.max(50, evt.range)));
+      
+      // Slow mo for fast shots
+      if (evt.speed > 35) {
+        this.slowMoTimer = CONFIG.SLOW_MO_DURATION;
+      }
+    }
+    else if (evt.type === 'impact') {
+      this.camera.addShake(Math.min(15, evt.speed * 0.3));
+      
+      // Spawn particles
+      const count = Math.min(30, Math.floor(evt.speed * 2));
+      for (let i = 0; i < count; i++) {
+        const p = particlePool.acquire();
+        if (!p) break;
+        p.x = evt.x;
+        p.y = 0.1;
+        p.vx = (Math.random() - 0.5) * evt.speed * 0.4;
+        p.vy = Math.random() * evt.speed * 0.5 + 1;
+        p.life = 1;
+        p.maxLife = 1;
+        p.size = 0.1 + Math.random() * 0.25;
+        const dirt = Math.random() > 0.3;
+        p.r = dirt ? 180 : 140;
+        p.g = dirt ? 155 : 115;
+        p.b = dirt ? 120 : 85;
+      }
+      
+      // Check hits
+      for (const t of this.targets) {
+        if (t.hit) continue;
+        const dx = Math.abs(evt.x - t.x);
+        if (dx < t.w / 2 + 2) {
+          const damage = Math.floor(evt.speed * 1.5);
+          if (t.damage(damage)) {
+            this.score += 1000;
+            this.showScorePopup(1000, t.x, t.h / 2);
+            // Destruction particles
+            for (let i = 0; i < 12; i++) {
+              const p = particlePool.acquire();
+              if (!p) break;
+              p.x = t.x;
+              p.y = t.h * 0.5;
+              p.vx = (Math.random() - 0.5) * 15;
+              p.vy = Math.random() * 12 + 3;
+              p.life = 1;
+              p.r = 232; p.g = 100; p.b = 100;
+            }
+          } else {
+            this.score += 100;
+            this.showScorePopup(100, t.x, t.h * 0.7);
+          }
+          this.updateUI();
+        }
+      }
+    }
+    else if (evt.type === 'landed') {
+      this.setStatus(`LANDED — ${Math.round(evt.x)} m`, 'landed');
+      document.getElementById('fire-btn').disabled = false;
+      document.getElementById('tel-max-h').textContent = Math.round(evt.maxHeight) + ' m';
+    }
+  }
+  
+  showScorePopup(points, x, y) {
+    const el = document.getElementById('score-popup');
+    el.textContent = '+' + points;
+    const pos = this.camera.worldToScreen(x, y);
+    el.style.left = pos.x + 'px';
+    el.style.top = pos.y + 'px';
+    el.classList.remove('show');
+    void el.offsetWidth;
+    el.classList.add('show');
+  }
+  
+  update(dt) {
+    // Apply slow motion
+    let timeScale = 1;
+    if (this.slowMoTimer > 0) {
+      timeScale = CONFIG.SLOW_MO_FACTOR;
+      this.slowMoTimer -= dt;
+    }
+    
+    // Fixed timestep accumulator
+    this.accumulator += dt * timeScale;
+    
+    let steps = 0;
+    while (this.accumulator >= CONFIG.FIXED_DT && steps < CONFIG.MAX_STEPS) {
+      const evt = this.trebuchet.step(CONFIG.FIXED_DT);
+      if (evt) this.handleEvent(evt);
+      
+      // Update particles
+      particlePool.forEach(p => {
+        p.vy -= CONFIG.GRAVITY * p.gravityScale * CONFIG.FIXED_DT;
+        p.x += p.vx * CONFIG.FIXED_DT;
+        p.y += p.vy * CONFIG.FIXED_DT;
+        p.life -= CONFIG.FIXED_DT * 1.5;
+        if (p.life <= 0) particlePool.release(p);
+      });
+      
+      this.accumulator -= CONFIG.FIXED_DT;
+      steps++;
+    }
+    
+    if (this.accumulator > CONFIG.FIXED_DT * 2) {
+      this.accumulator = 0;
+    }
+    
+    // Camera follow
+    if (this.trebuchet.released && 
+        (this.trebuchet.phase === 'firing' || this.trebuchet.phase === 'flying')) {
+      const pos = this.camera.worldToScreen(this.trebuchet.projX, this.trebuchet.projY);
+      this.camera.targetX += (this.renderer.W * 0.35 - pos.x) * 0.1;
+      this.camera.targetY += (this.renderer.H * 0.45 - (this.renderer.H - pos.y)) * 0.1;
+    } else if (this.trebuchet.phase === 'ready') {
+      this.camera.targetX = this.renderer.W * 0.28;
+      this.camera.targetY = this.renderer.H * 0.72;
+      this.camera.targetZoom = 1;
+    }
+    
+    this.camera.update();
+  }
+  
+  render() {
+    this.renderer.clear();
+    this.renderer.drawSky(this.trebuchet.time, this.camera);
+    this.renderer.drawGrid(this.camera);
+    this.renderer.drawGround(this.camera);
+    this.renderer.drawTrajectoryPreview(this.trebuchet, this.camera);
+    this.renderer.drawTargets(this.targets, this.camera);
+    this.renderer.drawTrebuchet(this.trebuchet, this.camera);
+    this.renderer.drawProjectile(this.trebuchet, this.camera);
+    this.renderer.drawParticles(this.camera);
+  }
+  
+  loop(timestamp) {
+    const dt = Math.min((timestamp - this.lastTime) / 1000, 0.05);
+    this.lastTime = timestamp;
+    
+    this.update(dt);
+    this.render();
+    this.updateTelemetry();
+    
+    requestAnimationFrame(t => this.loop(t));
+  }
+  
+  setupInput() {
+    const canvas = this.canvas;
+    let dragging = false;
+    let lastX = 0, lastY = 0;
+    let dragDist = 0;
+    let clickTimer = null;
+    
+    const handleStart = (x, y) => {
+      dragging = true;
+      lastX = x;
+      lastY = y;
+      dragDist = 0;
+      
+      // Check for target placement
+      const world = this.camera.screenToWorld(x, y);
+      if (world.y < 2 && world.y > -2 && world.x > 5 && this.trebuchet.phase === 'ready') {
+        clickTimer = setTimeout(() => {
+          if (dragDist < 5) this.addTarget(world.x);
+        }, 150);
+      }
+    };
+    
+    const handleMove = (x, y) => {
+      if (!dragging) return;
+      const dx = x - lastX;
+      const dy = y - lastY;
+      dragDist += Math.abs(dx) + Math.abs(dy);
+      
+      if (dragDist > 5 && clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+      }
+      
+      this.camera.x += dx;
+      this.camera.y -= dy;
+      this.camera.targetX = this.camera.x;
+      this.camera.targetY = this.camera.y;
+      
+      lastX = x;
+      lastY = y;
+    };
+    
+    const handleEnd = () => {
+      dragging = false;
+      if (clickTimer) {
+        clearTimeout(clickTimer);
+        clickTimer = null;
+      }
+    };
+    
+    // Mouse
+    canvas.addEventListener('mousedown', e => {
+      if (e.button === 0) handleStart(e.clientX, e.clientY);
+    });
+    canvas.addEventListener('mousemove', e => handleMove(e.clientX, e.clientY));
+    canvas.addEventListener('mouseup', handleEnd);
+    canvas.addEventListener('mouseleave', handleEnd);
+    
+    canvas.addEventListener('wheel', e => {
+      e.preventDefault();
+      this.camera.targetZoom *= Math.exp(-e.deltaY * 0.001);
+      this.camera.targetZoom = Math.max(0.12, Math.min(2.5, this.camera.targetZoom));
+    }, { passive: false });
+    
+    // Touch
+    let lastTouchDist = 0;
+    canvas.addEventListener('touchstart', e => {
+      if (e.touches.length === 1) {
+        handleStart(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+      }
+    }, { passive: true });
+    
+    canvas.addEventListener('touchmove', e => {
+      e.preventDefault();
+      if (e.touches.length === 1 && dragging) {
+        handleMove(e.touches[0].clientX, e.touches[0].clientY);
+      } else if (e.touches.length === 2) {
+        const dx = e.touches[0].clientX - e.touches[1].clientX;
+        const dy = e.touches[0].clientY - e.touches[1].clientY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (lastTouchDist > 0) {
+          this.camera.targetZoom *= dist / lastTouchDist;
+          this.camera.targetZoom = Math.max(0.12, Math.min(2.5, this.camera.targetZoom));
+        }
+        lastTouchDist = dist;
+      }
+    }, { passive: false });
+    
+    canvas.addEventListener('touchend', () => {
+      handleEnd();
+      lastTouchDist = 0;
+    });
+    
+    // Keyboard
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space') {
+        e.preventDefault();
+        this.fire();
+      }
+      if (e.code === 'KeyR') this.reset();
+    });
+    
+    // Resize
+    window.addEventListener('resize', () => {
+      this.renderer.resize();
+      if (this.trebuchet.phase === 'ready') {
+        this.camera.x = this.renderer.W * 0.28;
+        this.camera.y = this.renderer.H * 0.72;
+        this.camera.targetX = this.camera.x;
+        this.camera.targetY = this.camera.y;
+      }
+    });
+  }
+  
+  setupUI() {
+    const $ = id => document.getElementById(id);
+    const t = this.trebuchet;
+    
+    $('mass').addEventListener('input', e => {
+      t.params.cwMass = +e.target.value;
+      $('val-mass').textContent = t.params.cwMass + ' kg';
+    });
+    
+    $('proj-mass').addEventListener('input', e => {
+      t.params.projMass = +e.target.value;
+      $('val-proj').textContent = t.params.projMass + ' kg';
+    });
+    
+    $('ratio').addEventListener('input', e => {
+      t.params.armRatio = +e.target.value;
+      $('val-ratio').textContent = (+e.target.value).toFixed(1) + ' : 1';
+    });
+    
+    $('sling').addEventListener('input', e => {
+      t.params.slingLen = +e.target.value;
+      $('val-sling').textContent = t.params.slingLen.toFixed(1) + ' m';
+    });
+    
+    $('release-angle').addEventListener('input', e => {
+      t.params.releaseAngle = +e.target.value * Math.PI / 180;
+      $('val-release').textContent = e.target.value + '°';
+    });
+    
+    $('fire-btn').addEventListener('click', () => this.fire());
+    $('reset-btn').addEventListener('click', () => this.reset());
+  }
+  
+  updateUI() {
+    document.getElementById('tel-score').textContent = this.score;
+    
+    let hits = 0;
+    for (const t of this.targets) if (t.hit) hits++;
+    document.getElementById('tel-hits').textContent = hits + ' / ' + this.targets.length;
+  }
+  
+  updateTelemetry() {
+    const $ = id => document.getElementById(id);
+    const t = this.trebuchet;
+    
+    $('tel-arm-vel').textContent = Math.abs(t.armOmega * 180 / Math.PI).toFixed(0) + '°/s';
+    $('tel-tension').textContent = (t.tension / 1000).toFixed(1) + ' kN';
+    
+    let v = 0;
+    if (t.released) v = Math.sqrt(t.projVx * t.projVx + t.projVy * t.projVy);
+    $('tel-proj-vel').textContent = v.toFixed(1) + ' m/s';
+    
+    $('tel-alt').textContent = (t.released ? Math.max(0, t.projY).toFixed(1) : '0') + ' m';
+    $('tel-time').textContent = t.time.toFixed(2) + ' s';
+    
+    const phases = { ready: 'Ready', firing: 'Launching', flying: 'In Flight', landed: 'Landed' };
+    $('tel-phase').textContent = phases[t.phase] || t.phase;
+  }
+  
+  setStatus(text, cls) {
+    const el = document.getElementById('status');
+    el.textContent = text;
+    el.className = 'visible' + (cls ? ' ' + cls : '');
+  }
+}
+
+// Start
+const game = new Game();
+</script>
+</body>
+</html>

@@ -1,0 +1,346 @@
+/**
+ * ============================================================================
+ * Psychic Radar — Component Styles
+ * File: public/shared/css/psychic-radar.css
+ * ============================================================================
+ *
+ * WHAT THIS FILE IS:
+ * ---------------------------------------------------------------------------
+ * Extracted component styles for the Psychic Radar visualisation.
+ * These styles are shared between the standalone psychic-radar.html page
+ * and the CMS admin tool embedded panels.
+ *
+ * USAGE:
+ * ---------------------------------------------------------------------------
+ * Standalone page: <link rel="stylesheet" href="/shared/css/psychic-radar.css">
+ * CMS admin tool:  Imported where needed by the radar embedding module.
+ *
+ * DOES NOT INCLUDE:
+ * ---------------------------------------------------------------------------
+ * - Body/page-level styles (background, min-height, flex centering)
+ * - Standalone header (.radar-header)
+ * - Standalone bottom bar (.bottom-bar)
+ * - Page-level responsive breakpoints
+ * These remain in psychic-radar.html for the standalone version.
+ *
+ * ============================================================================
+ * Project: The Expanse v010
+ * Author: James (Project Manager)
+ * Extracted: February 24, 2026
+ * ============================================================================
+ */
+
+/* ===== CUSTOM PROPERTIES ===== */
+:root {
+    --crt-green: #00ff7f;
+    --crt-green-dim: rgba(0, 255, 127, 0.4);
+    --crt-green-faint: rgba(0, 255, 127, 0.15);
+
+    --rel-bound: #00ffff;
+    --rel-council: #7fff00;
+    --rel-protagonist: #ffd700;
+    --rel-ally: #00ff7f;
+    --rel-chaotic: #ff6600;
+    --rel-neutral: #888888;
+    --rel-hostile: #ff3333;
+    --rel-antagonist: #ff0066;
+
+    --pad-pleasure: #00ff7f;
+    --pad-arousal: #ffaa00;
+    --pad-dominance: #00ccff;
+}
+
+/* ===== RADAR CONTAINER ===== */
+.crt-wrapper {
+    position: relative;
+    aspect-ratio: 1 / 1;
+    background: #000;
+    padding: 12px;
+    box-shadow:
+        0 0 25px rgba(0, 0, 0, 0.9),
+        0 0 120px rgba(0, 0, 0, 1),
+        inset 0 0 100px rgba(0, 255, 127, 0.03);
+    border-radius: 50%;
+    overflow: hidden;
+    flex-shrink: 0;
+    will-change: transform;
+    transform: translateZ(0);
+}
+
+/* Scanlines */
+.crt-wrapper::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: repeating-linear-gradient(
+        0deg,
+        rgba(0, 0, 0, 0.3) 0px,
+        rgba(0, 0, 0, 0.3) 1px,
+        transparent 1px,
+        transparent 2px
+    );
+    mix-blend-mode: multiply;
+    opacity: 0.5;
+    pointer-events: none;
+    z-index: 4;
+    animation: scanlineDrift 8s linear infinite;
+}
+
+@keyframes scanlineDrift {
+    0% { transform: translateY(0); }
+    100% { transform: translateY(4px); }
+}
+
+/* Phosphor glow */
+.crt-wrapper::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at center, rgba(0, 255, 127, 0.18), transparent 60%);
+    opacity: 0.7;
+    mix-blend-mode: screen;
+    pointer-events: none;
+    z-index: 3;
+}
+
+.console {
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle at 50% 30%, #102211 0, #050908 60%, #020403 100%);
+    border-radius: 50%;
+    border: 3px solid #1d2a22;
+    box-shadow: inset 0 0 80px rgba(0, 0, 0, 0.9);
+    position: relative;
+    overflow: hidden;
+}
+
+.radar-canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+}
+
+/* Claude is always center */
+.center-marker {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 10px;
+    height: 10px;
+    background: var(--crt-green);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 10px var(--crt-green), 0 0 25px rgba(0, 255, 127, 0.4), inset 0 0 3px #000;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.claude-label {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -250%);
+    font-family: 'Orbitron', monospace;
+    font-size: 8px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: rgba(0, 255, 127, 0.6);
+    text-shadow: 0 0 6px rgba(0, 255, 127, 0.8);
+    pointer-events: none;
+    z-index: 10;
+}
+
+/* ===== SIDE PANEL ===== */
+.radar-side-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    font-family: 'IBM Plex Mono', 'SF Mono', 'Consolas', monospace;
+    color: var(--crt-green);
+}
+
+.radar-panel-section {
+    background: rgba(5, 10, 8, 0.92);
+    border: 1px solid rgba(0, 255, 127, 0.2);
+    border-radius: 4px;
+    padding: 10px 12px;
+}
+
+.radar-panel-section h3 {
+    font-family: 'Orbitron', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(0, 255, 127, 0.7);
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(0, 255, 127, 0.15);
+}
+
+.readout-row {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    padding: 2px 0;
+}
+
+.readout-label { color: rgba(0, 255, 127, 0.5); }
+
+.readout-value {
+    color: var(--crt-green);
+    text-shadow: 0 0 4px rgba(0, 255, 127, 0.4);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ===== PAD METERS ===== */
+.pad-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin: 3px 0;
+    font-size: 10px;
+}
+
+.pad-bar-label {
+    width: 14px;
+    color: rgba(0, 255, 127, 0.6);
+    font-weight: 600;
+}
+
+.pad-bar-track {
+    flex: 1;
+    height: 6px;
+    background: rgba(0, 255, 127, 0.08);
+    border-radius: 3px;
+    position: relative;
+    overflow: hidden;
+}
+
+.pad-bar-fill {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    border-radius: 3px;
+    transition: left 0.4s ease, width 0.4s ease;
+}
+
+.pad-bar-value {
+    width: 40px;
+    text-align: right;
+    color: var(--crt-green);
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ===== ENTITY LIST ===== */
+.entity-list {
+    max-height: 200px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 255, 127, 0.3) transparent;
+}
+
+.entity-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+    font-size: 10px;
+    cursor: pointer;
+    border-bottom: 1px solid rgba(0, 255, 127, 0.06);
+    transition: background 0.15s ease;
+}
+
+.entity-item:hover { background: rgba(0, 255, 127, 0.05); }
+.entity-item.selected { background: rgba(0, 255, 127, 0.1); }
+
+.entity-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.entity-name {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: rgba(0, 255, 127, 0.8);
+}
+
+.entity-dist {
+    color: rgba(0, 255, 127, 0.5);
+    font-size: 9px;
+    font-variant-numeric: tabular-nums;
+}
+
+/* ===== LEGEND ===== */
+.legend-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 3px 8px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 9px;
+    color: rgba(0, 255, 127, 0.6);
+}
+
+.legend-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+/* ===== CONNECTION STATUS ===== */
+.radar-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #ff3333;
+    box-shadow: 0 0 6px #ff3333;
+    transition: all 0.3s ease;
+}
+
+.radar-status-dot.online {
+    background: var(--crt-green);
+    box-shadow: 0 0 6px var(--crt-green);
+}
+
+.radar-status-dot.reconnecting {
+    background: var(--pad-arousal);
+    box-shadow: 0 0 6px var(--pad-arousal);
+    animation: radarStatusPulse 1s infinite;
+}
+
+@keyframes radarStatusPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+}
+
+/* ===== REDUCED MOTION ===== */
+@media (prefers-reduced-motion: reduce) {
+    .crt-wrapper::before {
+        animation: none;
+    }
+
+    .pad-bar-fill {
+        transition: none;
+    }
+
+    .radar-status-dot {
+        transition: none;
+    }
+
+    .radar-status-dot.reconnecting {
+        animation: none;
+    }
+}

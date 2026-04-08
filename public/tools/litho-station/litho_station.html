@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ЛИТОГРАФИЯ // LITHOPHANE STATION</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #0f0d0b;
+  --bg-panel: #1a1714;
+  --bg-section: #141210;
+  --bg-input: #0d0b09;
+  --amber: #c8a84b;
+  --amber-bright: #ffb000;
+  --amber-dim: #8b6f2f;
+  --amber-glow: rgba(200, 168, 75, 0.12);
+  --rust: #8b5e3c;
+  --border: #3d3530;
+  --danger: #8b2020;
+  --text: #d4c8b8;
+  --text-sec: #6b5e4f;
+  --text-dim: #4a4035;
+  --success: #5d8a5d;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box }
+html, body { height: 100%; overflow: hidden }
+body {
+  font-family: 'Share Tech Mono', monospace;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.4;
+  letter-spacing: 0.02em;
+}
+
+::-webkit-scrollbar { width: 6px }
+::-webkit-scrollbar-track { background: var(--bg) }
+::-webkit-scrollbar-thumb { background: var(--border) }
+
+/* ── SCANLINE OVERLAY ── */
+.app::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg, transparent, transparent 2px,
+    rgba(0, 0, 0, 0.04) 2px, rgba(0, 0, 0, 0.04) 4px
+  );
+  opacity: 0.5;
+}
+
+/* ── LAYOUT ── */
+.app { display: flex; height: 100vh; position: relative }
+
+/* ── CONTROL COLUMN ── */
+.ctrl {
+  width: 340px;
+  min-width: 340px;
+  background: var(--bg-panel);
+  border-right: 2px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  z-index: 10;
+}
+
+.panel-hdr {
+  padding: 16px 18px 12px;
+  border-bottom: 2px solid var(--border);
+  background: rgba(0, 0, 0, 0.2);
+}
+.panel-hdr h1 {
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--amber);
+}
+.panel-hdr .sub {
+  font-size: 11px;
+  color: var(--text-sec);
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+
+.ctrl-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ── SECTIONS ── */
+.section {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 16px;
+}
+.section-title {
+  font-size: 10px;
+  color: var(--rust);
+  letter-spacing: 0.15em;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+}
+
+/* ── CONTROLS ── */
+.cg { margin-bottom: 10px }
+.cg:last-child { margin-bottom: 0 }
+.cg-label {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+.cg-label span {
+  font-size: 11px;
+  color: var(--text-sec);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+.cg-label .val {
+  color: var(--amber);
+  font-weight: 600;
+  min-width: 50px;
+  text-align: right;
+}
+
+/* ── SLIDER ── */
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 3px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+}
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 12px;
+  height: 12px;
+  background: var(--amber);
+  border: 1px solid var(--bg);
+  cursor: pointer;
+}
+input[type=range]:disabled { opacity: 0.3; cursor: not-allowed }
+input[type=range]:disabled::-webkit-slider-thumb { background: var(--text-sec); cursor: not-allowed }
+
+/* ── SELECT ── */
+select {
+  width: 100%;
+  background: var(--bg);
+  color: var(--amber);
+  border: 1px solid var(--border);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 12px;
+  padding: 7px 8px;
+  outline: none;
+  cursor: pointer;
+}
+select:focus { border-color: var(--amber) }
+select:disabled { opacity: 0.3; cursor: not-allowed }
+
+/* ── CHECKBOX ── */
+.chk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--text-sec);
+  letter-spacing: 0.05em;
+}
+.chk input { display: none }
+.chk .box {
+  width: 14px;
+  height: 14px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  position: relative;
+  flex-shrink: 0;
+}
+.chk input:checked + .box {
+  border-color: var(--amber);
+  background: var(--amber);
+}
+.chk input:checked + .box::after {
+  content: "x";
+  position: absolute;
+  color: var(--bg);
+  font-size: 10px;
+  top: -1px;
+  left: 2px;
+  font-weight: bold;
+}
+.chk input:disabled + .box { opacity: 0.3 }
+
+/* ── BUTTONS ── */
+.btn {
+  display: block;
+  width: 100%;
+  background: var(--border);
+  color: var(--amber);
+  border: 1px solid transparent;
+  padding: 9px 12px;
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  margin-bottom: 6px;
+}
+.btn:hover:not(:disabled) { background: var(--rust); border-color: var(--amber) }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; color: var(--text-sec) }
+.btn-primary {
+  background: var(--amber);
+  color: var(--bg);
+  font-weight: 600;
+  border-color: var(--amber);
+}
+.btn-primary:hover:not(:disabled) { background: #d4b45c }
+.btn-secondary { color: var(--text-sec) }
+.btn-row { display: flex; gap: 6px }
+.btn-row .btn { flex: 1 }
+
+/* ── DROP ZONE ── */
+.drop {
+  border: 1px dashed var(--rust);
+  padding: 20px 14px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s;
+  color: var(--text-sec);
+  font-size: 11px;
+  letter-spacing: 0.05em;
+  background: rgba(0, 0, 0, 0.1);
+  position: relative;
+  overflow: hidden;
+}
+.drop:hover, .drop.over {
+  border-color: var(--amber);
+  color: var(--amber);
+  background: rgba(200, 168, 75, 0.05);
+}
+.drop.has-img {
+  border-style: solid;
+  border-color: var(--success);
+  padding: 4px;
+}
+.drop-thumb {
+  width: 100%;
+  display: block;
+  image-rendering: auto;
+}
+.drop input { display: none }
+
+/* ── PRESETS ── */
+.preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  max-height: 110px;
+  overflow-y: auto;
+}
+.preset-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  font-size: 11px;
+  cursor: pointer;
+}
+.preset-item:hover { border-color: var(--rust) }
+.preset-item .p-name { color: var(--amber); flex: 1 }
+.preset-item .p-del {
+  color: var(--danger);
+  cursor: pointer;
+  font-size: 10px;
+  opacity: 0.6;
+  padding: 2px 4px;
+}
+.preset-item .p-del:hover { opacity: 1 }
+.preset-input {
+  display: flex;
+  gap: 6px;
+}
+.preset-input input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--amber);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 11px;
+  padding: 5px 6px;
+  outline: none;
+}
+.preset-input input:focus { border-color: var(--amber) }
+.preset-input input::placeholder { color: var(--text-dim) }
+.preset-input .btn { width: auto; padding: 5px 10px; margin: 0; flex-shrink: 0 }
+
+/* ── STATS ── */
+.stats {
+  font-size: 10px;
+  color: var(--text-sec);
+  line-height: 1.8;
+  margin-top: 8px;
+}
+.stats .n { color: var(--amber) }
+
+/* ── HINT TEXT ── */
+.hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 4px;
+  letter-spacing: 0.02em;
+}
+
+/* ── TOOLTIP ── */
+.tip {
+  position: relative;
+  cursor: help;
+  color: var(--text-dim);
+  font-size: 10px;
+  margin-left: 4px;
+}
+.tip:hover::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 8px;
+  font-size: 9.5px;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.5;
+  z-index: 50;
+  pointer-events: none;
+  max-width: 200px;
+  border-radius: 0;
+}
+
+/* ── VIEWPORT ── */
+.vp {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.vp-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-panel);
+  border-bottom: 1px solid var(--border);
+  z-index: 5;
+}
+.vp-bar .btn {
+  width: auto;
+  padding: 5px 12px;
+  font-size: 10px;
+  margin: 0;
+}
+.vp-bar .btn.active {
+  background: var(--amber);
+  color: var(--bg);
+  border-color: var(--amber);
+}
+.vp-bar .sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+.vp-canvas { flex: 1; position: relative }
+#viewport3d { position: absolute; inset: 0 }
+#viewportCompare { position: absolute; inset: 0; display: none; cursor: ew-resize }
+#compareCanvas { width: 100%; height: 100% }
+
+/* ── INFO PANEL (viewport) ── */
+.vp-info {
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
+  background: rgba(20, 18, 16, 0.9);
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  font-size: 10px;
+  color: var(--text-sec);
+  pointer-events: none;
+  min-width: 160px;
+}
+.vp-info div { margin-bottom: 2px }
+.vp-info span { color: var(--amber); float: right }
+
+/* ── PROCESSING OVERLAY ── */
+.proc-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 13, 11, 0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  flex-direction: column;
+  gap: 12px;
+}
+.proc-overlay.show { display: flex }
+.proc-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--amber);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg) } }
+.proc-text {
+  font-size: 11px;
+  color: var(--amber-dim);
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+/* ── EMPTY STATE ── */
+.empty-state {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: none;
+}
+.empty-state.hide { display: none }
+.empty-line1 { font-size: 14px; letter-spacing: 0.1em; color: var(--rust) }
+.empty-line2 { font-size: 11px; letter-spacing: 0.05em; color: var(--text-dim); text-align: center; line-height: 1.8 }
+
+/* ── STATUS BAR ── */
+.status-bar {
+  position: fixed;
+  bottom: 0;
+  left: 340px;
+  right: 0;
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border);
+  padding: 6px 16px;
+  font-size: 11px;
+  color: var(--text-sec);
+  letter-spacing: 0.05em;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  z-index: 100;
+}
+.status-bar .s-main { color: var(--amber) }
+.status-bar .s-dim { color: var(--text-dim) }
+
+@media (prefers-reduced-motion: reduce) {
+  .proc-spinner { animation: none }
+  .app::after { display: none }
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- ═══ CONTROL COLUMN ═══ -->
+  <aside class="ctrl">
+    <div class="panel-hdr">
+      <h1>ЛИТОГРАФИЯ</h1>
+      <div class="sub">LITHOPHANE STATION // PHOTO → STL</div>
+    </div>
+    <div class="ctrl-scroll">
+
+      <!-- INPUT PARAMETERS -->
+      <div class="section">
+        <div class="section-title">// Input Parameters //</div>
+        <div class="drop" id="dropZone">
+          <div id="dropContent">[ DROP IMAGE FILE OR CLICK TO BROWSE ]<br>
+            <span style="font-size:9px;color:var(--text-dim)">JPG · PNG · WEBP</span>
+          </div>
+          <img class="drop-thumb" id="dropThumb" style="display:none" alt="preview">
+          <input type="file" id="fileInput" accept="image/*">
+        </div>
+        <div class="cg" style="margin-top:10px">
+          <div class="cg-label">
+            <span>Mesh Resolution<span class="tip" data-tip="Pixels along longest edge. Higher = more detail + larger file. 200-400 recommended.">?</span></span>
+            <span class="val" id="valRes">300</span>
+          </div>
+          <input type="range" id="slRes" min="80" max="600" step="10" value="300" disabled>
+        </div>
+      </div>
+
+      <!-- LITHOPHANE SHAPE -->
+      <div class="section">
+        <div class="section-title">// Lithophane Shape //</div>
+        <div class="cg">
+          <div class="cg-label"><span>Shape</span></div>
+          <select id="selShape" disabled>
+            <option value="flat">FLAT PANEL</option>
+            <option value="curved">CURVED (CYLINDRICAL)</option>
+            <option value="spherical">SPHERICAL</option>
+          </select>
+        </div>
+        <div class="cg">
+          <div class="cg-label"><span>Width</span><span class="val" id="valWidth">100 mm</span></div>
+          <input type="range" id="slWidth" min="30" max="300" step="1" value="100" disabled>
+        </div>
+        <div class="cg">
+          <div class="cg-label"><span>Min Thickness</span><span class="val" id="valMinT">0.8 mm</span></div>
+          <input type="range" id="slMinT" min="0.3" max="2.0" step="0.1" value="0.8" disabled>
+        </div>
+        <div class="cg">
+          <div class="cg-label"><span>Max Thickness</span><span class="val" id="valMaxT">3.0 mm</span></div>
+          <input type="range" id="slMaxT" min="1.0" max="6.0" step="0.1" value="3.0" disabled>
+        </div>
+        <div class="cg" id="cgXY" style="display:none">
+          <div class="cg-label">
+            <span>XY Curvature<span class="tip" data-tip="0° = flat, 180° = half-cylinder, 360° = closed tube">?</span></span>
+            <span class="val" id="valXY">180°</span>
+          </div>
+          <input type="range" id="slXY" min="10" max="360" step="1" value="180" disabled>
+        </div>
+        <div class="cg" id="cgZT" style="display:none">
+          <div class="cg-label"><span>Z Top Angle</span><span class="val" id="valZT">45°</span></div>
+          <input type="range" id="slZT" min="1" max="90" step="1" value="45" disabled>
+        </div>
+        <div class="cg" id="cgZB" style="display:none">
+          <div class="cg-label"><span>Z Bottom Angle</span><span class="val" id="valZB">45°</span></div>
+          <input type="range" id="slZB" min="1" max="90" step="1" value="45" disabled>
+        </div>
+        <div class="cg">
+          <div class="cg-label"><span>Border</span></div>
+          <select id="selBorder" disabled>
+            <option value="none">NONE</option>
+            <option value="thin">THIN FRAME (3MM)</option>
+            <option value="thick">THICK FRAME (6MM)</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- IMAGE PROCESSING -->
+      <div class="section">
+        <div class="section-title">// Image Processing //</div>
+        <div class="cg">
+          <div class="cg-label"><span>Contrast</span><span class="val" id="valContrast">0</span></div>
+          <input type="range" id="slContrast" min="-100" max="100" step="1" value="0" disabled>
+        </div>
+        <div class="cg">
+          <div class="cg-label"><span>Brightness</span><span class="val" id="valBright">0</span></div>
+          <input type="range" id="slBright" min="-100" max="100" step="1" value="0" disabled>
+        </div>
+        <div class="cg">
+          <div class="cg-label"><span>Gamma</span><span class="val" id="valGamma">1.00</span></div>
+          <input type="range" id="slGamma" min="0.2" max="3.0" step="0.05" value="1.0" disabled>
+        </div>
+        <div class="cg">
+          <div class="cg-label">
+            <span>Smooth / Blur<span class="tip" data-tip="Reduces noise artifacts. 1-2 passes recommended for photos.">?</span></span>
+            <span class="val" id="valBlur">0</span>
+          </div>
+          <input type="range" id="slBlur" min="0" max="5" step="1" value="0" disabled>
+        </div>
+        <label class="chk" style="margin-top:6px">
+          <input type="checkbox" id="chkInvert" disabled>
+          <span class="box"></span>
+          Invert (Negative Lithophane)
+        </label>
+      </div>
+
+      <!-- PARAMETER PRESETS -->
+      <div class="section">
+        <div class="section-title">// Parameter Presets //</div>
+        <div class="preset-list" id="presetList"></div>
+        <div class="preset-input">
+          <input type="text" id="presetName" placeholder="PRESET_NAME" maxlength="18">
+          <button class="btn" id="btnSavePreset">SAVE</button>
+        </div>
+      </div>
+
+      <!-- OUTPUT CONTROLS -->
+      <div class="section">
+        <div class="section-title">// Output Controls //</div>
+        <button class="btn btn-primary" id="btnExportSTL" disabled>EXPORT STL (BINARY)</button>
+        <button class="btn btn-secondary" id="btnExportHMP" disabled>EXPORT HEIGHTMAP PNG</button>
+        <div class="stats" id="statsDisplay">
+          <div>TRIANGLES: <span class="n" id="statTris">—</span></div>
+          <div>DIMENSIONS: <span class="n" id="statDims">—</span></div>
+          <div>EST. FILE SIZE: <span class="n" id="statSize">—</span></div>
+          <div>GENERATE TIME: <span class="n" id="statTime">—</span></div>
+        </div>
+        <div class="hint" style="margin-top:10px">
+          PRINT: White PLA · 100% infill · 3 perimeters · 0.2mm layer<br>
+          ~45mm/s · Print upright on edge · No supports needed
+        </div>
+        <div class="hint" style="margin-top:4px">CTRL+S export · CTRL+ENTER reprocess</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══ VIEWPORT ═══ -->
+  <main class="vp">
+    <div class="vp-bar">
+      <button class="btn active" id="btnView3D">3D VIEW</button>
+      <button class="btn" id="btnViewCmp">COMPARE</button>
+      <div class="sep"></div>
+      <button class="btn" id="btnBacklight" disabled>BACKLIGHT</button>
+      <button class="btn active" id="btnGrid">GRID</button>
+      <button class="btn" id="btnResetCam">RESET</button>
+    </div>
+    <div class="vp-canvas">
+      <div id="viewport3d"></div>
+      <div id="viewportCompare"><canvas id="compareCanvas"></canvas></div>
+      <div class="proc-overlay" id="procOverlay">
+        <div class="proc-spinner"></div>
+        <div class="proc-text">Generating Mesh...</div>
+      </div>
+      <div class="empty-state" id="emptyState">
+        <div class="empty-line1">[ NO INPUT SIGNAL ]</div>
+        <div class="empty-line2">DROP FILE OR USE BROWSE CONTROL<br>ACCEPTS: JPG PNG WEBP</div>
+      </div>
+      <div class="vp-info" id="vpInfo" style="display:none">
+        <div>ZOOM: <span id="infoZoom">100%</span></div>
+        <div>RENDER: <span id="infoRender">SOLID</span></div>
+      </div>
+    </div>
+  </main>
+</div>
+
+<!-- STATUS BAR -->
+<div class="status-bar">
+  <div>
+    <span class="s-main" id="statusMain">SYSTEM READY</span>
+    <span class="s-dim" id="statusSub">&nbsp;// AWAITING INPUT</span>
+  </div>
+  <div class="s-dim">LITHOPHANE ENGINE v1.0</div>
+</div>
+
+<!-- HIDDEN -->
+<canvas id="procCanvas" style="display:none"></canvas>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/* ════════════════════════════════════════════════════════════════════════════
+   LITHOPHANE STATION — MERGED BUILD
+   Engine: Zai architecture (unified _transform, raw triangle arrays)
+   Visuals: Kimi/Dither Station aesthetic
+   Bugs: All 6 critical + 2 moderate from audit FIXED
+   STL: Custom binary exporter (no scene traversal)
+   Controls: Inlined OrbitControls-lite (no CDN dependency)
+   ════════════════════════════════════════════════════════════════════════════ */
+(function(){
+'use strict';
+
+/* ── UTILITIES ── */
+function setStatus(main, sub) {
+  document.getElementById('statusMain').textContent = main;
+  document.getElementById('statusSub').textContent = sub ? ' // ' + sub : '';
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+  return (bytes / 1048576).toFixed(1) + ' MB';
+}
+
+function computeNormal(v0, v1, v2) {
+  const ax = v1[0]-v0[0], ay = v1[1]-v0[1], az = v1[2]-v0[2];
+  const bx = v2[0]-v0[0], by = v2[1]-v0[1], bz = v2[2]-v0[2];
+  const nx = ay*bz - az*by, ny = az*bx - ax*bz, nz = ax*by - ay*bx;
+  const len = Math.sqrt(nx*nx + ny*ny + nz*nz);
+  if (len > 1e-10) return [nx/len, ny/len, nz/len];
+  return [0, 0, 1];
+}
+
+/* ── BINARY STL EXPORTER ── */
+function exportBinarySTL(triangles) {
+  const bufLen = 84 + triangles.length * 50;
+  const buf = new ArrayBuffer(bufLen);
+  const dv = new DataView(buf);
+  const header = 'LITHO STATION - Binary STL';
+  for (let i = 0; i < Math.min(header.length, 80); i++) dv.setUint8(i, header.charCodeAt(i));
+  dv.setUint32(80, triangles.length, true);
+  let off = 84;
+  for (let i = 0; i < triangles.length; i++) {
+    const t = triangles[i];
+    const n = computeNormal(t[0], t[1], t[2]);
+    dv.setFloat32(off, n[0], true); off += 4;
+    dv.setFloat32(off, n[1], true); off += 4;
+    dv.setFloat32(off, n[2], true); off += 4;
+    for (let v = 0; v < 3; v++) {
+      dv.setFloat32(off, t[v][0], true); off += 4;
+      dv.setFloat32(off, t[v][1], true); off += 4;
+      dv.setFloat32(off, t[v][2], true); off += 4;
+    }
+    dv.setUint16(off, 0, true); off += 2;
+  }
+  return buf;
+}
+
+/* ══════════════════════════════════════════════════════════════
+   LITHOPHANE ENGINE
+   Zai's architecture: unified _transform(), raw triangle arrays,
+   heightmap-expansion borders, correct brightness→thickness mapping
+   ══════════════════════════════════════════════════════════════ */
+class LithophaneEngine {
+  constructor() {
+    this.image = null;
+    this.heightmap = null;
+    this.hmapW = 0;
+    this.hmapH = 0;
+    this.triangles = null;
+    this.processedHeightmap = null;
+  }
+
+  loadImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => { this.image = img; resolve(img); };
+        img.onerror = reject;
+        img.src = e.target.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  getParams() {
+    return {
+      resolution: +document.getElementById('slRes').value,
+      shape: document.getElementById('selShape').value,
+      widthMm: +document.getElementById('slWidth').value,
+      minThick: +document.getElementById('slMinT').value,
+      maxThick: +document.getElementById('slMaxT').value,
+      xyAngle: +document.getElementById('slXY').value,
+      zTopAngle: +document.getElementById('slZT').value,
+      zBotAngle: +document.getElementById('slZB').value,
+      border: document.getElementById('selBorder').value,
+      contrast: +document.getElementById('slContrast').value,
+      brightness: +document.getElementById('slBright').value,
+      gamma: +document.getElementById('slGamma').value,
+      invert: document.getElementById('chkInvert').checked,
+      blur: +document.getElementById('slBlur').value
+    };
+  }
+
+  process() {
+    if (!this.image) return null;
+    const p = this.getParams();
+    const img = this.image;
+
+    const aspect = img.height / img.width;
+    let w = p.resolution;
+    let h = Math.max(2, Math.round(w * aspect));
+
+    const pc = document.getElementById('procCanvas');
+    pc.width = w; pc.height = h;
+    const pctx = pc.getContext('2d');
+    pctx.drawImage(img, 0, 0, w, h);
+
+    // Blur via canvas filter
+    if (p.blur > 0) {
+      const tmp = document.createElement('canvas');
+      tmp.width = w; tmp.height = h;
+      const tctx = tmp.getContext('2d');
+      tctx.filter = 'blur(' + p.blur + 'px)';
+      tctx.drawImage(pc, 0, 0);
+      pctx.clearRect(0, 0, w, h);
+      pctx.drawImage(tmp, 0, 0);
+    }
+
+    const imgData = pctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const hmap = new Float32Array(w * h);
+
+    const cFactor = (p.contrast + 100) / 100;
+    const bShift = p.brightness / 100;
+    const gInv = p.gamma > 0.01 ? 1 / p.gamma : 100;
+
+    for (let i = 0; i < w * h; i++) {
+      let v = (d[i*4] * 0.299 + d[i*4+1] * 0.587 + d[i*4+2] * 0.114) / 255;
+      v += bShift;
+      v = (v - 0.5) * cFactor + 0.5;
+      v = Math.pow(Math.max(0, v), gInv);
+      v = Math.max(0, Math.min(1, v));
+      if (p.invert) v = 1 - v;
+      hmap[i] = v;
+    }
+
+    // Border: expand heightmap with black (0) pixels = max thickness
+    let finalW = w, finalH = h, finalHmap = hmap;
+    if (p.border !== 'none') {
+      const borderMm = p.border === 'thin' ? 3 : 6;
+      const pixSizeX = p.widthMm / w;
+      const heightMm = p.widthMm * (h / w);
+      const pixSizeY = heightMm / h;
+      const bw = Math.max(1, Math.round(borderMm / pixSizeX));
+      const bh = Math.max(1, Math.round(borderMm / pixSizeY));
+      finalW = w + 2 * bw;
+      finalH = h + 2 * bh;
+      finalHmap = new Float32Array(finalW * finalH);
+      finalHmap.fill(0); // black = max thickness
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          finalHmap[(y + bh) * finalW + (x + bw)] = hmap[y * w + x];
+        }
+      }
+    }
+
+    this.heightmap = finalHmap;
+    this.hmapW = finalW;
+    this.hmapH = finalH;
+    this.processedHeightmap = finalHmap;
+
+    return p;
+  }
+
+  generateMesh(p) {
+    const w = this.hmapW, h = this.hmapH;
+    const hmap = this.heightmap;
+    if (!hmap || w < 2 || h < 2) return;
+
+    if (p.maxThick <= p.minThick) {
+      throw new Error('MAX THICKNESS MUST EXCEED MIN THICKNESS');
+    }
+
+    const heightMm = p.widthMm * (h / w);
+    const tris = [];
+
+    const frontVerts = new Array(w * h);
+    const backVerts = new Array(w * h);
+
+    for (let j = 0; j < h; j++) {
+      for (let i = 0; i < w; i++) {
+        const idx = j * w + i;
+        const brightness = hmap[idx];
+        // CORRECT: white(1) = thin, black(0) = thick
+        const thickness = p.minThick + (p.maxThick - p.minThick) * (1 - brightness);
+
+        const x = (i / (w - 1) - 0.5) * p.widthMm;
+        const y = (j / (h - 1) - 0.5) * heightMm;
+
+        const verts = this._transform(x, y, thickness, p, p.widthMm, heightMm);
+        frontVerts[idx] = verts[0];
+        backVerts[idx] = verts[1];
+      }
+    }
+
+    // Front face
+    for (let j = 0; j < h - 1; j++) {
+      for (let i = 0; i < w - 1; i++) {
+        const i00 = j*w+i, i10 = j*w+i+1, i11 = (j+1)*w+i+1, i01 = (j+1)*w+i;
+        tris.push([frontVerts[i00], frontVerts[i10], frontVerts[i11]]);
+        tris.push([frontVerts[i00], frontVerts[i11], frontVerts[i01]]);
+      }
+    }
+
+    // Back face (reversed winding)
+    for (let j = 0; j < h - 1; j++) {
+      for (let i = 0; i < w - 1; i++) {
+        const i00 = j*w+i, i10 = j*w+i+1, i11 = (j+1)*w+i+1, i01 = (j+1)*w+i;
+        tris.push([backVerts[i00], backVerts[i11], backVerts[i10]]);
+        tris.push([backVerts[i00], backVerts[i01], backVerts[i11]]);
+      }
+    }
+
+    // Side walls — unified for ALL shapes (fixes Kimi's missing spherical walls)
+    // Left wall (i=0)
+    for (let j = 0; j < h - 1; j++) {
+      const a = j*w, b = (j+1)*w;
+      tris.push([frontVerts[a], backVerts[b], backVerts[a]]);
+      tris.push([frontVerts[a], frontVerts[b], backVerts[b]]);
+    }
+    // Right wall (i=w-1)
+    for (let j = 0; j < h - 1; j++) {
+      const a = j*w+w-1, b = (j+1)*w+w-1;
+      tris.push([frontVerts[a], backVerts[a], backVerts[b]]);
+      tris.push([frontVerts[a], backVerts[b], frontVerts[b]]);
+    }
+    // Bottom wall (j=0)
+    for (let i = 0; i < w - 1; i++) {
+      const a = i, b = i+1;
+      tris.push([frontVerts[a], backVerts[a], backVerts[b]]);
+      tris.push([frontVerts[a], backVerts[b], frontVerts[b]]);
+    }
+    // Top wall (j=h-1)
+    for (let i = 0; i < w - 1; i++) {
+      const a = (h-1)*w+i, b = (h-1)*w+i+1;
+      tris.push([frontVerts[a], backVerts[b], backVerts[a]]);
+      tris.push([frontVerts[a], frontVerts[b], backVerts[b]]);
+    }
+
+    this.triangles = tris;
+  }
+
+  // Unified shape transform — returns [frontVertex, backVertex]
+  // Guards against division by zero for all shapes
+  _transform(x, y, thickness, p, widthMm, heightMm) {
+    const xyRad = p.xyAngle * Math.PI / 180;
+
+    // FLAT — or curved with negligible angle (div/zero guard)
+    if (p.shape === 'flat' || (p.shape === 'curved' && xyRad < 0.01)) {
+      return [[x, y, thickness], [x, y, 0]];
+    }
+
+    // CURVED (cylindrical)
+    if (p.shape === 'curved') {
+      const R = widthMm / xyRad;
+      const alpha = (x / widthMm) * xyRad;
+      const sa = Math.sin(alpha), ca = Math.cos(alpha);
+      return [
+        [(R + thickness) * sa, y, (R + thickness) * (ca - 1)],
+        [R * sa, y, R * (ca - 1)]
+      ];
+    }
+
+    // SPHERICAL
+    if (p.shape === 'spherical') {
+      const ztRad = p.zTopAngle * Math.PI / 180;
+      const zbRad = p.zBotAngle * Math.PI / 180;
+      const totalZ = ztRad + zbRad;
+      // Guard: degenerate angles fall back to flat
+      if (totalZ < 0.01 || xyRad < 0.01) {
+        return [[x, y, thickness], [x, y, 0]];
+      }
+      const Rx = widthMm / xyRad;
+      const Ry = heightMm / totalZ;
+      const R = (Rx + Ry) / 2;
+
+      const phi = (x / widthMm) * xyRad;
+      const theta = -(y / heightMm) * totalZ + ztRad;
+      const ct = Math.cos(theta), st = Math.sin(theta);
+      const cp = Math.cos(phi), sp = Math.sin(phi);
+
+      return [
+        [(R+thickness)*ct*sp, (R+thickness)*st, (R+thickness)*ct*cp],
+        [R*ct*sp, R*st, R*ct*cp]
+      ];
+    }
+
+    return [[x, y, thickness], [x, y, 0]];
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INLINE ORBIT CONTROLS (no CDN dependency)
+   Simplified from Three.js OrbitControls — MIT License
+   Supports mouse drag (orbit), wheel (zoom), touch (orbit+pinch)
+   ══════════════════════════════════════════════════════════════ */
+class SimpleOrbitControls {
+  constructor(camera, domElement) {
+    this.camera = camera;
+    this.domElement = domElement;
+    this.target = new THREE.Vector3();
+    this.enableDamping = true;
+    this.dampingFactor = 0.08;
+    this.rotateSpeed = 0.8;
+    this.zoomSpeed = 1.0;
+    this.minDistance = 5;
+    this.maxDistance = 2000;
+
+    this._spherical = new THREE.Spherical();
+    this._sphericalDelta = new THREE.Spherical();
+    this._scale = 1;
+    this._isDragging = false;
+    this._prevMouse = { x: 0, y: 0 };
+    this._pinchDist = 0;
+
+    this._bindEvents();
+    this._updateSpherical();
+  }
+
+  _updateSpherical() {
+    const offset = new THREE.Vector3().subVectors(this.camera.position, this.target);
+    this._spherical.setFromVector3(offset);
+  }
+
+  _bindEvents() {
+    const el = this.domElement;
+
+    el.addEventListener('mousedown', (e) => {
+      this._isDragging = true;
+      this._prevMouse = { x: e.clientX, y: e.clientY };
+    });
+
+    el.addEventListener('mousemove', (e) => {
+      if (!this._isDragging) return;
+      const dx = e.clientX - this._prevMouse.x;
+      const dy = e.clientY - this._prevMouse.y;
+      this._sphericalDelta.theta -= dx * 0.003 * this.rotateSpeed;
+      this._sphericalDelta.phi -= dy * 0.003 * this.rotateSpeed;
+      this._prevMouse = { x: e.clientX, y: e.clientY };
+    });
+
+    window.addEventListener('mouseup', () => { this._isDragging = false; });
+
+    el.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      if (e.deltaY > 0) this._scale *= 0.95;
+      else this._scale *= 1.05;
+    }, { passive: false });
+
+    // Touch support
+    el.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 1) {
+        this._isDragging = true;
+        this._prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length === 2) {
+        this._pinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchmove', (e) => {
+      e.preventDefault();
+      if (e.touches.length === 1 && this._isDragging) {
+        const dx = e.touches[0].clientX - this._prevMouse.x;
+        const dy = e.touches[0].clientY - this._prevMouse.y;
+        this._sphericalDelta.theta -= dx * 0.003 * this.rotateSpeed;
+        this._sphericalDelta.phi -= dy * 0.003 * this.rotateSpeed;
+        this._prevMouse = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      } else if (e.touches.length === 2) {
+        const dist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        if (this._pinchDist > 0) {
+          this._scale *= dist / this._pinchDist;
+        }
+        this._pinchDist = dist;
+      }
+    }, { passive: false });
+
+    el.addEventListener('touchend', () => {
+      this._isDragging = false;
+      this._pinchDist = 0;
+    });
+  }
+
+  update() {
+    const EPS = 0.000001;
+
+    if (this.enableDamping) {
+      this._spherical.theta += this._sphericalDelta.theta * this.dampingFactor;
+      this._spherical.phi += this._sphericalDelta.phi * this.dampingFactor;
+    } else {
+      this._spherical.theta += this._sphericalDelta.theta;
+      this._spherical.phi += this._sphericalDelta.phi;
+    }
+
+    // Clamp phi
+    this._spherical.phi = Math.max(EPS, Math.min(Math.PI - EPS, this._spherical.phi));
+
+    // Apply zoom
+    this._spherical.radius *= this._scale;
+    this._spherical.radius = Math.max(this.minDistance, Math.min(this.maxDistance, this._spherical.radius));
+    this._scale = 1;
+
+    // Damping
+    if (this.enableDamping) {
+      this._sphericalDelta.theta *= (1 - this.dampingFactor);
+      this._sphericalDelta.phi *= (1 - this.dampingFactor);
+    } else {
+      this._sphericalDelta.set(0, 0, 0);
+    }
+
+    // Apply to camera
+    const offset = new THREE.Vector3().setFromSpherical(this._spherical);
+    this.camera.position.copy(this.target).add(offset);
+    this.camera.lookAt(this.target);
+  }
+
+  reset(target, distance) {
+    this.target.copy(target);
+    this._spherical.radius = distance;
+    this._spherical.theta = 0.6;
+    this._spherical.phi = 1.2;
+    this._sphericalDelta.set(0, 0, 0);
+    this._scale = 1;
+    this.update();
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   THREE.JS VIEWPORT
+   ══════════════════════════════════════════════════════════════ */
+let scene, camera, renderer, controls, gridHelper;
+let lithoMesh = null, backlightPlane = null, imageTexture = null;
+let backlightOn = false, gridOn = true;
+
+function initThree() {
+  const container = document.getElementById('viewport3d');
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f0d0b);
+
+  camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 5000);
+  camera.position.set(80, 60, 120);
+
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(container.clientWidth, container.clientHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  container.appendChild(renderer.domElement);
+
+  controls = new SimpleOrbitControls(camera, renderer.domElement);
+
+  // Lighting
+  scene.add(new THREE.AmbientLight(0x504840, 0.6));
+  const dir1 = new THREE.DirectionalLight(0xffeedd, 0.8);
+  dir1.position.set(1, 1.5, 1);
+  scene.add(dir1);
+  const dir2 = new THREE.DirectionalLight(0xaabbcc, 0.3);
+  dir2.position.set(-1, 0.5, -0.5);
+  scene.add(dir2);
+
+  // Grid
+  gridHelper = new THREE.GridHelper(200, 20, 0x3d3530, 0x1a1714);
+  gridHelper.rotation.x = Math.PI / 2;
+  scene.add(gridHelper);
+
+  // Resize
+  const ro = new ResizeObserver(() => {
+    const w = container.clientWidth, h = container.clientHeight;
+    if (w < 1 || h < 1) return;
+    renderer.setSize(w, h);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  });
+  ro.observe(container);
+
+  animate();
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  controls.update();
+  renderer.render(scene, camera);
+}
+
+function updatePreview(triangles) {
+  if (lithoMesh) { scene.remove(lithoMesh); lithoMesh.geometry.dispose(); lithoMesh.material.dispose(); lithoMesh = null; }
+  if (backlightPlane) { scene.remove(backlightPlane); backlightPlane.geometry.dispose(); backlightPlane.material.dispose(); backlightPlane = null; }
+  if (!triangles || triangles.length === 0) return;
+
+  const geo = new THREE.BufferGeometry();
+  const verts = new Float32Array(triangles.length * 9);
+  const norms = new Float32Array(triangles.length * 9);
+
+  for (let i = 0; i < triangles.length; i++) {
+    const t = triangles[i];
+    const n = computeNormal(t[0], t[1], t[2]);
+    for (let v = 0; v < 3; v++) {
+      verts[i*9 + v*3]     = t[v][0];
+      verts[i*9 + v*3 + 1] = t[v][1];
+      verts[i*9 + v*3 + 2] = t[v][2];
+      norms[i*9 + v*3]     = n[0];
+      norms[i*9 + v*3 + 1] = n[1];
+      norms[i*9 + v*3 + 2] = n[2];
+    }
+  }
+  geo.setAttribute('position', new THREE.BufferAttribute(verts, 3));
+  geo.setAttribute('normal', new THREE.BufferAttribute(norms, 3));
+
+  const mat = new THREE.MeshPhongMaterial({
+    color: 0xe8e0d0,
+    specular: 0x222222,
+    shininess: 15,
+    side: THREE.DoubleSide
+  });
+
+  lithoMesh = new THREE.Mesh(geo, mat);
+  scene.add(lithoMesh);
+
+  // Auto-fit camera
+  geo.computeBoundingBox();
+  const center = new THREE.Vector3();
+  geo.boundingBox.getCenter(center);
+  const size = new THREE.Vector3();
+  geo.boundingBox.getSize(size);
+  const dist = Math.max(size.x, size.y, size.z) * 1.8;
+  controls.reset(center, dist);
+
+  document.getElementById('vpInfo').style.display = '';
+
+  if (backlightOn && imageTexture) enableBacklight(true);
+}
+
+function enableBacklight(on) {
+  backlightOn = on;
+  if (!lithoMesh) return;
+  if (on && imageTexture) {
+    if (!backlightPlane) {
+      const shape = document.getElementById('selShape').value;
+      if (shape === 'flat') {
+        const bb = lithoMesh.geometry.boundingBox;
+        const size = new THREE.Vector3();
+        bb.getSize(size);
+        const center = new THREE.Vector3();
+        bb.getCenter(center);
+        const geo = new THREE.PlaneGeometry(size.x * 1.05, size.y * 1.05);
+        const mat = new THREE.MeshBasicMaterial({ map: imageTexture, side: THREE.DoubleSide });
+        backlightPlane = new THREE.Mesh(geo, mat);
+        backlightPlane.position.set(center.x, center.y, bb.min.z - 0.5);
+        scene.add(backlightPlane);
+      }
+    }
+    lithoMesh.material.transparent = true;
+    lithoMesh.material.opacity = 0.65;
+    document.getElementById('infoRender').textContent = 'BACKLIT';
+  } else {
+    if (backlightPlane) {
+      scene.remove(backlightPlane);
+      backlightPlane.geometry.dispose();
+      backlightPlane.material.dispose();
+      backlightPlane = null;
+    }
+    if (lithoMesh) {
+      lithoMesh.material.transparent = false;
+      lithoMesh.material.opacity = 1;
+    }
+    document.getElementById('infoRender').textContent = 'SOLID';
+  }
+}
+
+function resetCamera() {
+  if (!lithoMesh) return;
+  const bb = lithoMesh.geometry.boundingBox;
+  const center = new THREE.Vector3();
+  bb.getCenter(center);
+  const size = new THREE.Vector3();
+  bb.getSize(size);
+  controls.reset(center, Math.max(size.x, size.y, size.z) * 1.8);
+}
+
+/* ── COMPARISON VIEW ── */
+let comparePos = 0.5;
+let compareDragging = false;
+
+function drawComparison() {
+  const canvas = document.getElementById('compareCanvas');
+  const container = document.getElementById('viewportCompare');
+  const ctx = canvas.getContext('2d');
+  const dpr = Math.min(window.devicePixelRatio, 2);
+  canvas.width = container.clientWidth * dpr;
+  canvas.height = container.clientHeight * dpr;
+  ctx.scale(dpr, dpr);
+  const cw = container.clientWidth, ch = container.clientHeight;
+
+  if (!engine.image || !engine.processedHeightmap) {
+    ctx.fillStyle = '#0f0d0b';
+    ctx.fillRect(0, 0, cw, ch);
+    return;
+  }
+
+  const img = engine.image;
+  const scale = Math.min(cw * 0.9 / img.width, ch * 0.9 / img.height);
+  const dw = img.width * scale, dh = img.height * scale;
+  const dx = (cw - dw) / 2, dy = (ch - dh) / 2;
+
+  // Heightmap canvas
+  const hmpC = document.createElement('canvas');
+  hmpC.width = engine.hmapW; hmpC.height = engine.hmapH;
+  const hctx = hmpC.getContext('2d');
+  const himgData = hctx.createImageData(engine.hmapW, engine.hmapH);
+  for (let i = 0; i < engine.processedHeightmap.length; i++) {
+    const v = Math.round(engine.processedHeightmap[i] * 255);
+    himgData.data[i*4] = v; himgData.data[i*4+1] = v; himgData.data[i*4+2] = v; himgData.data[i*4+3] = 255;
+  }
+  hctx.putImageData(himgData, 0, 0);
+
+  ctx.fillStyle = '#0f0d0b';
+  ctx.fillRect(0, 0, cw, ch);
+
+  // Right: heightmap
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(dx + dw * comparePos, dy, dw * (1 - comparePos), dh);
+  ctx.clip();
+  ctx.drawImage(hmpC, dx, dy, dw, dh);
+  ctx.restore();
+
+  // Left: original greyscale
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(dx, dy, dw * comparePos, dh);
+  ctx.clip();
+  ctx.filter = 'grayscale(100%)';
+  ctx.drawImage(img, dx, dy, dw, dh);
+  ctx.filter = 'none';
+  ctx.restore();
+
+  // Border
+  ctx.strokeStyle = '#3d3530';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(dx, dy, dw, dh);
+
+  // Slider line
+  const sx = dx + dw * comparePos;
+  ctx.beginPath();
+  ctx.moveTo(sx, dy);
+  ctx.lineTo(sx, dy + dh);
+  ctx.strokeStyle = '#c8a84b';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Handle
+  ctx.beginPath();
+  ctx.arc(sx, dy + dh / 2, 8, 0, Math.PI * 2);
+  ctx.fillStyle = '#c8a84b';
+  ctx.fill();
+  ctx.strokeStyle = '#0f0d0b';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Labels
+  ctx.font = '10px Share Tech Mono';
+  ctx.fillStyle = '#6b5e4f';
+  ctx.textAlign = 'left';
+  ctx.fillText('ORIGINAL', dx + 4, dy - 6);
+  ctx.textAlign = 'right';
+  ctx.fillText('HEIGHTMAP', dx + dw - 4, dy - 6);
+}
+
+function initCompareEvents() {
+  const cv = document.getElementById('viewportCompare');
+  function updatePos(e) {
+    const rect = cv.getBoundingClientRect();
+    let x = (e.clientX || (e.touches && e.touches[0].clientX)) - rect.left;
+    const img = engine.image;
+    if (!img) return;
+    const scale = Math.min(cv.clientWidth * 0.9 / img.width, cv.clientHeight * 0.9 / img.height);
+    const dw = img.width * scale;
+    const dx = (cv.clientWidth - dw) / 2;
+    comparePos = Math.max(0, Math.min(1, (x - dx) / dw));
+    drawComparison();
+  }
+  cv.addEventListener('mousedown', (e) => { compareDragging = true; updatePos(e); });
+  window.addEventListener('mousemove', (e) => { if (compareDragging) updatePos(e); });
+  window.addEventListener('mouseup', () => { compareDragging = false; });
+  cv.addEventListener('touchstart', (e) => { compareDragging = true; updatePos(e); e.preventDefault(); }, { passive: false });
+  window.addEventListener('touchmove', (e) => { if (compareDragging) updatePos(e); }, { passive: false });
+  window.addEventListener('touchend', () => { compareDragging = false; });
+}
+
+/* ── PRESET SYSTEM (Kimi-style named presets) ── */
+const PRESET_KEY = 'litho_presets_v1';
+const MAX_PRESETS = 6;
+
+function loadPresets() {
+  try { return JSON.parse(localStorage.getItem(PRESET_KEY)) || []; }
+  catch(e) { return []; }
+}
+function savePresetsToStorage(p) { localStorage.setItem(PRESET_KEY, JSON.stringify(p)); }
+
+function renderPresets() {
+  const list = document.getElementById('presetList');
+  const presets = loadPresets();
+  list.innerHTML = '';
+  if (presets.length === 0) {
+    list.innerHTML = '<div style="font-size:10px;color:var(--text-dim);padding:2px 0">NO PRESETS SAVED</div>';
+    return;
+  }
+  presets.forEach((preset, index) => {
+    const item = document.createElement('div');
+    item.className = 'preset-item';
+    item.innerHTML = '<span class="p-name">' + preset.name + '</span><span class="p-del">[DEL]</span>';
+    item.querySelector('.p-name').addEventListener('click', () => {
+      applyPreset(presets[index].params);
+      setStatus('PRESET LOADED', preset.name);
+    });
+    item.querySelector('.p-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      presets.splice(index, 1);
+      savePresetsToStorage(presets);
+      renderPresets();
+      setStatus('PRESET DELETED', '');
+    });
+    list.appendChild(item);
+  });
+}
+
+function savePreset() {
+  const nameInput = document.getElementById('presetName');
+  const name = nameInput.value.trim().toUpperCase();
+  if (!name) return;
+  const presets = loadPresets();
+  if (presets.length >= MAX_PRESETS) presets.shift();
+  presets.push({ name, params: engine.getParams() });
+  savePresetsToStorage(presets);
+  renderPresets();
+  nameInput.value = '';
+  setStatus('PRESET SAVED', name);
+}
+
+function applyPreset(p) {
+  document.getElementById('slRes').value = p.resolution;
+  document.getElementById('selShape').value = p.shape;
+  document.getElementById('slWidth').value = p.widthMm;
+  document.getElementById('slMinT').value = p.minThick;
+  document.getElementById('slMaxT').value = p.maxThick;
+  document.getElementById('slXY').value = p.xyAngle;
+  document.getElementById('slZT').value = p.zTopAngle;
+  document.getElementById('slZB').value = p.zBotAngle;
+  document.getElementById('selBorder').value = p.border;
+  document.getElementById('slContrast').value = p.contrast;
+  document.getElementById('slBright').value = p.brightness;
+  document.getElementById('slGamma').value = p.gamma;
+  document.getElementById('chkInvert').checked = p.invert;
+  document.getElementById('slBlur').value = p.blur;
+  updateValueDisplays();
+  updateShapeControls();
+  scheduleProcess();
+}
+
+/* ══════════════════════════════════════════════════════════════
+   UI CONTROLLER
+   ══════════════════════════════════════════════════════════════ */
+const engine = new LithophaneEngine();
+let processTimer = null;
+let hasImage = false;
+let currentFileName = 'lithophane';
+
+function updateValueDisplays() {
+  document.getElementById('valRes').textContent = document.getElementById('slRes').value;
+  document.getElementById('valWidth').textContent = document.getElementById('slWidth').value + ' mm';
+  document.getElementById('valMinT').textContent = (+document.getElementById('slMinT').value).toFixed(1) + ' mm';
+  document.getElementById('valMaxT').textContent = (+document.getElementById('slMaxT').value).toFixed(1) + ' mm';
+  document.getElementById('valXY').textContent = document.getElementById('slXY').value + '\u00B0';
+  document.getElementById('valZT').textContent = document.getElementById('slZT').value + '\u00B0';
+  document.getElementById('valZB').textContent = document.getElementById('slZB').value + '\u00B0';
+  document.getElementById('valContrast').textContent = document.getElementById('slContrast').value;
+  document.getElementById('valBright').textContent = document.getElementById('slBright').value;
+  document.getElementById('valGamma').textContent = (+document.getElementById('slGamma').value).toFixed(2);
+  document.getElementById('valBlur').textContent = document.getElementById('slBlur').value;
+}
+
+function updateShapeControls() {
+  const shape = document.getElementById('selShape').value;
+  document.getElementById('cgXY').style.display = shape === 'curved' ? '' : 'none';
+  document.getElementById('cgZT').style.display = shape === 'spherical' ? '' : 'none';
+  document.getElementById('cgZB').style.display = shape === 'spherical' ? '' : 'none';
+}
+
+function setControlsEnabled(on) {
+  ['slRes','selShape','slWidth','slMinT','slMaxT','slXY','slZT','slZB','selBorder',
+   'slContrast','slBright','slGamma','chkInvert','slBlur','btnExportSTL','btnExportHMP','btnBacklight'
+  ].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !on;
+  });
+}
+
+function updateStats() {
+  if (!engine.triangles) {
+    ['statTris','statDims','statSize','statTime'].forEach(id => document.getElementById(id).textContent = '—');
+    return;
+  }
+  const tc = engine.triangles.length;
+  const p = engine.getParams();
+  const hm = p.widthMm * (engine.hmapH / engine.hmapW);
+  document.getElementById('statTris').textContent = tc.toLocaleString();
+  document.getElementById('statDims').textContent = p.widthMm.toFixed(0) + ' × ' + hm.toFixed(1) + ' × ' + p.maxThick.toFixed(1) + ' mm';
+  document.getElementById('statSize').textContent = formatSize(84 + tc * 50);
+}
+
+function scheduleProcess() {
+  clearTimeout(processTimer);
+  processTimer = setTimeout(runProcess, 300);
+}
+
+function runProcess() {
+  if (!hasImage) return;
+  const overlay = document.getElementById('procOverlay');
+  overlay.classList.add('show');
+  setStatus('PROCESSING', 'GENERATING MESH...');
+
+  setTimeout(() => {
+    try {
+      const t0 = performance.now();
+      const params = engine.process();
+      if (!params) { overlay.classList.remove('show'); return; }
+      engine.generateMesh(params);
+      const dt = performance.now() - t0;
+
+      updatePreview(engine.triangles);
+      updateStats();
+      document.getElementById('statTime').textContent = dt.toFixed(0) + ' ms';
+
+      const tc = engine.triangles.length;
+      setStatus('PROCESS COMPLETE', tc.toLocaleString() + ' TRIANGLES · ' + formatSize(84 + tc * 50));
+    } catch(e) {
+      setStatus('ERROR', e.message);
+    }
+    overlay.classList.remove('show');
+  }, 60);
+}
+
+/* ── FILE LOADING ── */
+function handleFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    setStatus('ERROR', 'INVALID FILE TYPE');
+    return;
+  }
+  currentFileName = file.name.replace(/\.[^/.]+$/, '');
+  setStatus('LOADING', file.name.toUpperCase());
+
+  engine.loadImage(file).then(img => {
+    hasImage = true;
+    setControlsEnabled(true);
+    document.getElementById('emptyState').classList.add('hide');
+
+    const thumb = document.getElementById('dropThumb');
+    const content = document.getElementById('dropContent');
+    const zone = document.getElementById('dropZone');
+    thumb.src = img.src;
+    thumb.style.display = 'block';
+    content.style.display = 'none';
+    zone.classList.add('has-img');
+
+    // Texture for backlight
+    const texC = document.createElement('canvas');
+    texC.width = img.width; texC.height = img.height;
+    texC.getContext('2d').drawImage(img, 0, 0);
+    if (imageTexture) imageTexture.dispose();
+    imageTexture = new THREE.CanvasTexture(texC);
+
+    setStatus('IMAGE LOADED', img.width + '×' + img.height);
+    scheduleProcess();
+  }).catch(() => {
+    setStatus('ERROR', 'FAILED TO LOAD IMAGE');
+  });
+}
+
+/* ── EXPORTS ── */
+function doExportSTL() {
+  if (!engine.triangles) return;
+  setStatus('EXPORTING', 'BINARY STL...');
+  setTimeout(() => {
+    try {
+      const buf = exportBinarySTL(engine.triangles);
+      const blob = new Blob([buf], { type: 'application/octet-stream' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = currentFileName + '_lithophane.stl';
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus('EXPORTED', a.download + ' · ' + formatSize(buf.byteLength));
+    } catch(e) {
+      setStatus('ERROR', 'STL EXPORT FAILED');
+    }
+  }, 50);
+}
+
+function doExportHeightmap() {
+  if (!engine.processedHeightmap) return;
+  const c = document.createElement('canvas');
+  c.width = engine.hmapW; c.height = engine.hmapH;
+  const ctx = c.getContext('2d');
+  const id = ctx.createImageData(c.width, c.height);
+  for (let i = 0; i < engine.processedHeightmap.length; i++) {
+    const v = Math.round(engine.processedHeightmap[i] * 255);
+    id.data[i*4] = v; id.data[i*4+1] = v; id.data[i*4+2] = v; id.data[i*4+3] = 255;
+  }
+  ctx.putImageData(id, 0, 0);
+  const a = document.createElement('a');
+  a.download = currentFileName + '_heightmap.png';
+  a.href = c.toDataURL('image/png');
+  a.click();
+  setStatus('EXPORTED', a.download);
+}
+
+/* ── VIEW TOGGLING ── */
+let currentView = '3d';
+function setView(mode) {
+  currentView = mode;
+  document.getElementById('btnView3D').classList.toggle('active', mode === '3d');
+  document.getElementById('btnViewCmp').classList.toggle('active', mode === 'cmp');
+  document.getElementById('viewport3d').style.display = mode === '3d' ? '' : 'none';
+  document.getElementById('viewportCompare').style.display = mode === 'cmp' ? '' : 'none';
+  document.getElementById('vpInfo').style.display = mode === '3d' && lithoMesh ? '' : 'none';
+  if (mode === 'cmp') drawComparison();
+  if (mode === '3d' && renderer) {
+    const c = document.getElementById('viewport3d');
+    renderer.setSize(c.clientWidth, c.clientHeight);
+    camera.aspect = c.clientWidth / c.clientHeight;
+    camera.updateProjectionMatrix();
+  }
+}
+
+/* ══════════════════════════════════════════════════════════════
+   INIT
+   ══════════════════════════════════════════════════════════════ */
+function init() {
+  initThree();
+  initCompareEvents();
+  renderPresets();
+  updateValueDisplays();
+  updateShapeControls();
+
+  // File input
+  const dropZone = document.getElementById('dropZone');
+  const fileInput = document.getElementById('fileInput');
+  dropZone.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', (e) => {
+    if (e.target.files.length) handleFile(e.target.files[0]);
+  });
+
+  // Drag & drop (drop zone + viewport)
+  function preventDef(e) { e.preventDefault(); e.stopPropagation(); }
+  [dropZone, document.getElementById('viewport3d')].forEach(el => {
+    el.addEventListener('dragover', (e) => { preventDef(e); dropZone.classList.add('over'); });
+    el.addEventListener('dragleave', (e) => { preventDef(e); dropZone.classList.remove('over'); });
+    el.addEventListener('drop', (e) => {
+      preventDef(e);
+      dropZone.classList.remove('over');
+      if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+    });
+  });
+
+  // Sliders
+  ['slRes','slWidth','slMinT','slMaxT','slXY','slZT','slZB','slContrast','slBright','slGamma','slBlur'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+      updateValueDisplays();
+      scheduleProcess();
+    });
+  });
+
+  // Selects
+  document.getElementById('selShape').addEventListener('change', () => { updateShapeControls(); scheduleProcess(); });
+  document.getElementById('selBorder').addEventListener('change', () => scheduleProcess());
+  document.getElementById('chkInvert').addEventListener('change', () => scheduleProcess());
+
+  // View buttons
+  document.getElementById('btnView3D').addEventListener('click', () => setView('3d'));
+  document.getElementById('btnViewCmp').addEventListener('click', () => setView('cmp'));
+
+  document.getElementById('btnBacklight').addEventListener('click', () => {
+    const btn = document.getElementById('btnBacklight');
+    const on = !btn.classList.contains('active');
+    btn.classList.toggle('active', on);
+    enableBacklight(on);
+    if (on && document.getElementById('selShape').value !== 'flat') {
+      setStatus('NOTE', 'BACKLIGHT PREVIEW BEST FOR FLAT PANEL MODE');
+    }
+  });
+
+  document.getElementById('btnGrid').addEventListener('click', () => {
+    gridOn = !gridOn;
+    gridHelper.visible = gridOn;
+    document.getElementById('btnGrid').classList.toggle('active', gridOn);
+  });
+
+  document.getElementById('btnResetCam').addEventListener('click', resetCamera);
+  document.getElementById('btnExportSTL').addEventListener('click', doExportSTL);
+  document.getElementById('btnExportHMP').addEventListener('click', doExportHeightmap);
+  document.getElementById('btnSavePreset').addEventListener('click', savePreset);
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); doExportSTL(); }
+    if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); runProcess(); }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', init);
+
+})();
+</script>
+</body>
+</html>

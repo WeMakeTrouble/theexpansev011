@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ОБРАБОТКА ИЗОБРАЖЕНИЙ // 1-BIT DITHERING STATION</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&display=swap');
+        
+        :root {
+            --bg: #1a1714;
+            --bg-panel: #141210;
+            --amber: #c8a84b;
+            --amber-dim: #8b6f2f;
+            --rust: #8b5e3c;
+            --border: #3d3530;
+            --danger: #8b2020;
+            --text-secondary: #6b5e4f;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; image-rendering: pixelated; image-rendering: -moz-crisp-edges; image-rendering: crisp-edges; }
+
+        body {
+            background: var(--bg);
+            color: var(--amber);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 13px;
+            line-height: 1.4;
+            overflow: hidden;
+            height: 100vh;
+            letter-spacing: 0.02em;
+        }
+
+        .instrument-panel { display: flex; height: 100vh; width: 100vw; }
+
+        .control-column {
+            width: 380px;
+            min-width: 380px;
+            background: var(--bg-panel);
+            border-right: 3px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            overflow-x: hidden;
+        }
+
+        .control-column::-webkit-scrollbar { width: 6px; }
+        .control-column::-webkit-scrollbar-track { background: var(--bg); }
+        .control-column::-webkit-scrollbar-thumb { background: var(--border); }
+
+        .header-block {
+            border-bottom: 2px solid var(--border);
+            padding: 20px;
+            background: rgba(0,0,0,0.2);
+        }
+
+        .header-block h1 { font-size: 16px; font-weight: 400; letter-spacing: 0.1em; margin-bottom: 8px; }
+        .header-block .subtitle { font-size: 11px; color: var(--text-secondary); letter-spacing: 0.05em; }
+
+        .section { border-bottom: 1px solid var(--border); padding: 16px 20px; }
+
+        .section-label {
+            font-size: 10px;
+            color: var(--rust);
+            letter-spacing: 0.15em;
+            margin-bottom: 12px;
+            text-transform: uppercase;
+        }
+
+        .file-drop {
+            border: 1px dashed var(--rust);
+            padding: 24px 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            color: var(--text-secondary);
+            font-size: 11px;
+            letter-spacing: 0.05em;
+            background: rgba(0,0,0,0.1);
+        }
+
+        .file-drop:hover, .file-drop.dragover { border-color: var(--amber); color: var(--amber); background: rgba(200,168,75,0.05); }
+        .file-drop.active { border-color: var(--amber); color: var(--amber); background: rgba(200,168,75,0.1); }
+
+        #fileInput { display: none; }
+
+        .control-group { margin-bottom: 14px; }
+        .control-group:last-child { margin-bottom: 0; }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: var(--text-secondary);
+            margin-bottom: 6px;
+            letter-spacing: 0.05em;
+        }
+
+        .control-label .label-text { text-transform: uppercase; }
+        .control-label .value-display { color: var(--amber); font-weight: 600; }
+
+        input[type="range"] {
+            width: 100%;
+            background: transparent;
+            -webkit-appearance: none;
+            height: 3px;
+            background: var(--border);
+            outline: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 12px;
+            height: 12px;
+            background: var(--amber);
+            cursor: pointer;
+            border: 1px solid var(--bg);
+        }
+
+        input[type="range"]:disabled { opacity: 0.3; cursor: not-allowed; }
+        input[type="range"]:disabled::-webkit-slider-thumb { background: var(--text-secondary); cursor: not-allowed; }
+
+        select {
+            width: 100%;
+            background: var(--bg);
+            color: var(--amber);
+            border: 1px solid var(--border);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 12px;
+            padding: 8px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        select:focus { border-color: var(--amber); }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            font-size: 11px;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            letter-spacing: 0.05em;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            appearance: none;
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            border: 1px solid var(--border);
+            background: var(--bg);
+            cursor: pointer;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        .checkbox-label input[type="checkbox"]:checked { border-color: var(--amber); background: var(--amber); }
+        .checkbox-label input[type="checkbox"]:checked::after {
+            content: "x";
+            position: absolute;
+            color: var(--bg);
+            font-size: 10px;
+            top: -1px;
+            left: 2px;
+            font-weight: bold;
+        }
+
+        .button-group { display: flex; gap: 8px; margin-top: 12px; }
+
+        button {
+            flex: 1;
+            background: var(--border);
+            color: var(--amber);
+            border: 1px solid transparent;
+            padding: 10px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        button:hover:not(:disabled) { background: var(--rust); border-color: var(--amber); }
+        button:disabled { opacity: 0.3; cursor: not-allowed; color: var(--text-secondary); }
+
+        button.primary { background: var(--amber); color: var(--bg); font-weight: 600; border-color: var(--amber); }
+        button.primary:hover:not(:disabled) { background: #d4b45c; }
+
+        .preset-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 10px;
+            max-height: 120px;
+            overflow-y: auto;
+        }
+
+        .preset-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 8px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            font-size: 11px;
+        }
+
+        .preset-item:hover { border-color: var(--rust); }
+        .preset-item .preset-name { color: var(--amber); cursor: pointer; flex: 1; }
+        .preset-item .preset-delete { color: var(--danger); cursor: pointer; font-size: 10px; opacity: 0.6; padding: 2px 4px; }
+        .preset-item .preset-delete:hover { opacity: 1; }
+
+        .preset-input-group { display: flex; gap: 6px; }
+
+        .preset-input-group input {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--amber);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 11px;
+            padding: 6px;
+            outline: none;
+        }
+
+        .preset-input-group input:focus { border-color: var(--amber); }
+        .preset-input-group input::placeholder { color: var(--text-secondary); }
+
+        .viewport {
+            flex: 1;
+            background: #0f0d0b;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .viewport-content {
+            position: relative;
+            max-width: 90%;
+            max-height: 90%;
+        }
+
+        #outputCanvas {
+            display: block;
+            max-width: 100%;
+            max-height: 85vh;
+            border: 1px solid var(--border);
+        }
+
+        .empty-state { text-align: center; color: var(--text-secondary); padding: 40px; }
+        .empty-state .line-1 { font-size: 14px; letter-spacing: 0.1em; margin-bottom: 10px; color: var(--rust); }
+        .empty-state .line-2 { font-size: 11px; letter-spacing: 0.05em; }
+
+        .comparison-container { position: relative; overflow: hidden; }
+
+        .comparison-original {
+            position: absolute;
+            top: 0; left: 0;
+            height: 100%;
+            overflow: hidden;
+            border-right: 2px solid var(--amber);
+            z-index: 10;
+        }
+
+        .comparison-original img {
+            height: 100%;
+            width: auto;
+            max-width: none;
+            filter: grayscale(100%) contrast(1.1);
+            display: block;
+        }
+
+        .comparison-slider {
+            position: absolute;
+            top: 0; bottom: 0;
+            left: 50%;
+            width: 20px;
+            transform: translateX(-50%);
+            cursor: ew-resize;
+            z-index: 20;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .comparison-slider::before {
+            content: "";
+            position: absolute;
+            top: 0; bottom: 0; left: 50%;
+            width: 2px;
+            background: var(--amber);
+            transform: translateX(-50%);
+        }
+
+        .slider-handle {
+            width: 32px;
+            height: 32px;
+            background: var(--amber);
+            border: 2px solid var(--bg);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            color: var(--bg);
+            font-weight: bold;
+            z-index: 21;
+            user-select: none;
+        }
+
+        .status-bar {
+            position: fixed;
+            bottom: 0;
+            left: 380px;
+            right: 0;
+            background: var(--bg-panel);
+            border-top: 1px solid var(--border);
+            padding: 8px 20px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            letter-spacing: 0.05em;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .status-bar .status-main { color: var(--amber); }
+        .status-bar .status-dim { color: var(--rust); }
+
+        .hidden { display: none !important; }
+        .hint-text { font-size: 10px; color: var(--text-secondary); margin-top: 4px; letter-spacing: 0.02em; }
+    </style>
+</head>
+<body>
+
+<div class="instrument-panel">
+    <div class="control-column">
+        <div class="header-block">
+            <h1>ОБРАБОТКА ИЗОБРАЖЕНИЙ</h1>
+            <div class="subtitle">1-BIT DITHERING STATION // MK-IV</div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">// INPUT PARAMETERS //</div>
+            <div class="file-drop" id="dropZone">[ DROP IMAGE FILE OR CLICK TO BROWSE ]</div>
+            <input type="file" id="fileInput" accept="image/*">
+            <div class="control-group" style="margin-top:14px;">
+                <div class="control-label">
+                    <span class="label-text">Algorithm</span>
+                </div>
+                <select id="algorithm">
+                    <option value="bayer8" data-label="BAYER 8x8 (Ordered)">BAYER 8x8 — Ordered Dither</option>
+                    <option value="bayer4" data-label="BAYER 4x4 (Fast)">BAYER 4x4 — Fast Ordered</option>
+                    <option value="atkinson" data-label="ATKINSON (Error Diffusion)">ATKINSON — Error Diffusion</option>
+                    <option value="floyd" data-label="FLOYD-STEINBERG (Smooth)">FLOYD-STEINBERG — Smooth Diffusion</option>
+                </select>
+            </div>
+            <div class="control-group">
+                <div class="control-label">
+                    <span class="label-text">Max Output Width</span>
+                    <span><span class="value-display" id="resVal">640</span><span style="color:var(--text-secondary)">px</span></span>
+                </div>
+                <input type="range" id="maxWidth" min="320" max="1920" step="32" value="640">
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">// PROCESSING CONTROLS //</div>
+            <div class="control-group">
+                <div class="control-label">
+                    <span class="label-text">Threshold</span>
+                    <span class="value-display" id="threshVal">128</span>
+                </div>
+                <input type="range" id="threshold" min="0" max="255" value="128">
+                <div class="hint-text">* applies to all algorithms as bias point</div>
+            </div>
+            <div class="control-group">
+                <div class="control-label">
+                    <span class="label-text">Contrast</span>
+                    <span><span class="value-display" id="contrastVal">1.0</span><span style="color:var(--text-secondary)">x</span></span>
+                </div>
+                <input type="range" id="contrast" min="0.5" max="2.0" step="0.1" value="1.0">
+            </div>
+            <div class="control-group">
+                <div class="control-label">
+                    <span class="label-text">Brightness</span>
+                    <span class="value-display" id="brightVal">0</span>
+                </div>
+                <input type="range" id="brightness" min="-50" max="50" step="5" value="0">
+            </div>
+            <div class="control-group">
+                <div class="control-label">
+                    <span class="label-text">Gamma</span>
+                    <span class="value-display" id="gammaVal">2.2</span>
+                </div>
+                <input type="range" id="gamma" min="1.0" max="3.0" step="0.1" value="2.2">
+            </div>
+            <label class="checkbox-label" style="margin-top:12px;">
+                <input type="checkbox" id="comparisonMode">
+                <span>Enable Before / After Comparison</span>
+            </label>
+            <div class="button-group" style="margin-top:16px;">
+                <button id="processBtn" class="primary" disabled>PROCESS</button>
+            </div>
+            <div class="hint-text" style="margin-top:8px; text-align:center;">CTRL+ENTER to process</div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">// PARAMETER PRESETS //</div>
+            <div class="preset-list" id="presetList"></div>
+            <div class="preset-input-group">
+                <input type="text" id="presetName" placeholder="PRESET_NAME" maxlength="20">
+                <button id="savePresetBtn" style="flex:0 0 auto;padding:6px 12px;">SAVE</button>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-label">// OUTPUT CONTROLS //</div>
+            <label class="checkbox-label">
+                <input type="checkbox" id="amberMode" checked>
+                <span>Amber Phosphor (uncheck for monochrome)</span>
+            </label>
+            <div class="button-group" style="margin-top:12px;">
+                <button id="downloadBtn">EXPORT PNG</button>
+            </div>
+            <div class="hint-text" style="margin-top:8px; text-align:center;">CTRL+S to export</div>
+        </div>
+    </div>
+
+    <div class="viewport" id="viewport">
+        <div class="viewport-content" id="viewportContent">
+            <div class="empty-state" id="emptyState">
+                <div class="line-1">[ NO INPUT SIGNAL ]</div>
+                <div class="line-2">DROP FILE OR USE BROWSE CONTROL<br><br>ACCEPTS: PNG JPG WEBP GIF</div>
+            </div>
+            <canvas id="outputCanvas" class="hidden"></canvas>
+            <div id="comparisonView" class="comparison-container hidden">
+                <canvas id="compareCanvas"></canvas>
+                <div class="comparison-original" id="compareOriginal">
+                    <img id="compareOriginalImg" src="" alt="original">
+                </div>
+                <div class="comparison-slider" id="compareSlider">
+                    <div class="slider-handle">&#8596;</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="status-bar">
+        <div>
+            <span class="status-main" id="statusMain">SYSTEM READY</span>
+            <span class="status-dim" id="statusSub">&nbsp;// AWAITING INPUT</span>
+        </div>
+        <div class="status-dim" id="statusDims"></div>
+    </div>
+</div>
+
+<script>
+const BAYER_8X8 = [
+    [0,48,12,60,3,51,15,63],
+    [32,16,44,28,35,19,47,31],
+    [8,56,4,52,11,59,7,55],
+    [40,24,36,20,43,27,39,23],
+    [2,50,14,62,1,49,13,61],
+    [34,18,46,30,33,17,45,29],
+    [10,58,6,54,9,57,5,53],
+    [42,26,38,22,41,25,37,21]
+];
+
+const BAYER_4X4 = [
+    [0,8,2,10],
+    [12,4,14,6],
+    [3,11,1,9],
+    [15,7,13,5]
+];
+
+class DitherEngine {
+    constructor(canvas) {
+        this.canvas = canvas;
+        this.ctx = canvas.getContext('2d', { willReadFrequently: true });
+    }
+
+    preprocess(imageData, contrast, brightness, gamma) {
+        const data = imageData.data;
+        const gc = 1 / gamma;
+        for (let i = 0; i < data.length; i += 4) {
+            let r = Math.pow(data[i] / 255, gc);
+            let g = Math.pow(data[i+1] / 255, gc);
+            let b = Math.pow(data[i+2] / 255, gc);
+            r = ((r - 0.5) * contrast) + 0.5 + brightness / 255;
+            g = ((g - 0.5) * contrast) + 0.5 + brightness / 255;
+            b = ((b - 0.5) * contrast) + 0.5 + brightness / 255;
+            data[i]   = Math.max(0, Math.min(255, r * 255));
+            data[i+1] = Math.max(0, Math.min(255, g * 255));
+            data[i+2] = Math.max(0, Math.min(255, b * 255));
+        }
+        return imageData;
+    }
+
+    bayerDither(imageData, matrixSize, threshold) {
+        const data = imageData.data;
+        const w = imageData.width;
+        const h = imageData.height;
+        const matrix = matrixSize === 8 ? BAYER_8X8 : BAYER_4X4;
+        const ml = matrix.length;
+        const scale = 256 / (ml * ml);
+        const tmap = new Int16Array(ml * ml);
+        for (let y = 0; y < ml; y++)
+            for (let x = 0; x < ml; x++)
+                tmap[y * ml + x] = (matrix[y][x] * scale) - 128 + threshold;
+        for (let y = 0; y < h; y++) {
+            const my = (y % ml) * ml;
+            for (let x = 0; x < w; x++) {
+                const i = (y * w + x) * 4;
+                const lum = data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114;
+                const v = lum > tmap[my + (x % ml)] ? 255 : 0;
+                data[i] = data[i+1] = data[i+2] = v;
+                data[i+3] = 255;
+            }
+        }
+        return imageData;
+    }
+
+    atkinsonDither(imageData, threshold) {
+        const w = imageData.width;
+        const h = imageData.height;
+        const data = imageData.data;
+        const pixels = new Float32Array(w * h);
+        for (let i = 0; i < pixels.length; i++) {
+            const d = i * 4;
+            pixels[i] = data[d] * 0.299 + data[d+1] * 0.587 + data[d+2] * 0.114;
+        }
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const idx = y * w + x;
+                const old = pixels[idx];
+                const nw = old > threshold ? 255 : 0;
+                const err = (old - nw) / 8;
+                pixels[idx] = nw;
+                if (x+1 < w) pixels[idx+1] += err;
+                if (x+2 < w) pixels[idx+2] += err;
+                if (y+1 < h) {
+                    if (x-1 >= 0) pixels[idx+w-1] += err;
+                    pixels[idx+w] += err;
+                    if (x+1 < w) pixels[idx+w+1] += err;
+                }
+                if (y+2 < h) pixels[idx+w*2] += err;
+            }
+        }
+        for (let i = 0; i < pixels.length; i++) {
+            const v = pixels[i] > threshold ? 255 : 0;
+            const d = i * 4;
+            data[d] = data[d+1] = data[d+2] = v;
+            data[d+3] = 255;
+        }
+        return imageData;
+    }
+
+    floydSteinbergDither(imageData, threshold) {
+        const w = imageData.width;
+        const h = imageData.height;
+        const data = imageData.data;
+        const pixels = new Float32Array(w * h);
+        for (let i = 0; i < pixels.length; i++) {
+            const d = i * 4;
+            pixels[i] = data[d] * 0.299 + data[d+1] * 0.587 + data[d+2] * 0.114;
+        }
+        for (let y = 0; y < h; y++) {
+            for (let x = 0; x < w; x++) {
+                const idx = y * w + x;
+                const old = pixels[idx];
+                const nw = old > threshold ? 255 : 0;
+                const err = old - nw;
+                pixels[idx] = nw;
+                if (x+1 < w)     pixels[idx+1]   += err * 7/16;
+                if (y+1 < h) {
+                    if (x-1 >= 0) pixels[idx+w-1] += err * 3/16;
+                                  pixels[idx+w]    += err * 5/16;
+                    if (x+1 < w)  pixels[idx+w+1]  += err * 1/16;
+                }
+            }
+        }
+        for (let i = 0; i < pixels.length; i++) {
+            const v = pixels[i] > threshold ? 255 : 0;
+            const d = i * 4;
+            data[d] = data[d+1] = data[d+2] = v;
+            data[d+3] = 255;
+        }
+        return imageData;
+    }
+
+    applyColor(imageData, useAmber) {
+        const data = imageData.data;
+        const fg = useAmber ? [200,168,75] : [220,220,220];
+        const bg = [26,23,20];
+        for (let i = 0; i < data.length; i += 4) {
+            const c = data[i] > 127 ? fg : bg;
+            data[i] = c[0]; data[i+1] = c[1]; data[i+2] = c[2]; data[i+3] = 255;
+        }
+        return imageData;
+    }
+
+    async process(image, settings) {
+        const { maxWidth, algorithm, contrast, brightness, gamma, threshold, useAmber } = settings;
+        let w = image.width, h = image.height;
+        const MAX = 4096;
+        if (w > MAX || h > MAX) {
+            const r = Math.min(MAX/w, MAX/h);
+            w = Math.floor(w*r); h = Math.floor(h*r);
+        }
+        if (w > maxWidth) {
+            h = Math.floor(h * maxWidth/w);
+            w = maxWidth;
+        }
+        this.canvas.width = w;
+        this.canvas.height = h;
+        this.ctx.imageSmoothingEnabled = false;
+        this.ctx.fillStyle = '#1a1714';
+        this.ctx.fillRect(0, 0, w, h);
+        this.ctx.drawImage(image, 0, 0, w, h);
+        let id = this.ctx.getImageData(0, 0, w, h);
+        if (contrast !== 1.0 || brightness !== 0 || gamma !== 2.2)
+            id = this.preprocess(id, contrast, brightness, gamma);
+        switch(algorithm) {
+            case 'bayer8':   id = this.bayerDither(id, 8, threshold); break;
+            case 'bayer4':   id = this.bayerDither(id, 4, threshold); break;
+            case 'atkinson': id = this.atkinsonDither(id, threshold); break;
+            case 'floyd':    id = this.floydSteinbergDither(id, threshold); break;
+        }
+        id = this.applyColor(id, useAmber);
+        this.ctx.putImageData(id, 0, 0);
+        return { width: w, height: h };
+    }
+}
+
+const state = {
+    engine: new DitherEngine(document.getElementById('outputCanvas')),
+    originalImage: null,
+    isProcessing: false,
+    comparisonActive: false,
+    comparisonRatio: 0.5,
+    presets: [],
+    hasProcessed: false
+};
+
+const els = {
+    dropZone:           document.getElementById('dropZone'),
+    fileInput:          document.getElementById('fileInput'),
+    algorithm:          document.getElementById('algorithm'),
+    maxWidth:           document.getElementById('maxWidth'),
+    threshold:          document.getElementById('threshold'),
+    contrast:           document.getElementById('contrast'),
+    brightness:         document.getElementById('brightness'),
+    gamma:              document.getElementById('gamma'),
+    comparisonMode:     document.getElementById('comparisonMode'),
+    amberMode:          document.getElementById('amberMode'),
+    processBtn:         document.getElementById('processBtn'),
+    downloadBtn:        document.getElementById('downloadBtn'),
+    savePresetBtn:      document.getElementById('savePresetBtn'),
+    presetName:         document.getElementById('presetName'),
+    presetList:         document.getElementById('presetList'),
+    emptyState:         document.getElementById('emptyState'),
+    canvas:             document.getElementById('outputCanvas'),
+    compareView:        document.getElementById('comparisonView'),
+    compareCanvas:      document.getElementById('compareCanvas'),
+    compareOriginal:    document.getElementById('compareOriginal'),
+    compareOriginalImg: document.getElementById('compareOriginalImg'),
+    compareSlider:      document.getElementById('compareSlider'),
+    statusMain:         document.getElementById('statusMain'),
+    statusSub:          document.getElementById('statusSub'),
+    statusDims:         document.getElementById('statusDims'),
+    resVal:             document.getElementById('resVal'),
+    threshVal:          document.getElementById('threshVal'),
+    contrastVal:        document.getElementById('contrastVal'),
+    brightVal:          document.getElementById('brightVal'),
+    gammaVal:           document.getElementById('gammaVal')
+};
+
+function setStatus(main, sub) {
+    els.statusMain.textContent = main;
+    els.statusSub.textContent = sub ? ' // ' + sub : '';
+}
+
+function updateValueDisplays() {
+    els.resVal.textContent      = els.maxWidth.value;
+    els.threshVal.textContent   = els.threshold.value;
+    els.contrastVal.textContent = parseFloat(els.contrast.value).toFixed(1);
+    els.brightVal.textContent   = els.brightness.value;
+    els.gammaVal.textContent    = parseFloat(els.gamma.value).toFixed(1);
+}
+
+['maxWidth','threshold','contrast','brightness','gamma'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateValueDisplays);
+});
+
+els.algorithm.addEventListener('change', () => {
+    const opt = els.algorithm.options[els.algorithm.selectedIndex];
+    setStatus('SYSTEM READY', opt.getAttribute('data-label'));
+});
+
+const PRESETS_KEY = 'ditherStation_v2_presets';
+
+function loadPresets() {
+    try {
+        const saved = localStorage.getItem(PRESETS_KEY);
+        if (saved) { state.presets = JSON.parse(saved); renderPresets(); }
+    } catch(e) {}
+}
+
+function savePresetsToStorage() {
+    try { localStorage.setItem(PRESETS_KEY, JSON.stringify(state.presets)); } catch(e) {}
+}
+
+function renderPresets() {
+    els.presetList.innerHTML = '';
+    if (state.presets.length === 0) {
+        els.presetList.innerHTML = '<div style="font-size:10px;color:var(--text-secondary);padding:4px 0;">NO PRESETS SAVED</div>';
+        return;
+    }
+    state.presets.forEach((preset, index) => {
+        const item = document.createElement('div');
+        item.className = 'preset-item';
+        item.innerHTML = '<span class="preset-name">' + preset.name + '</span><span class="preset-delete">[DEL]</span>';
+        item.querySelector('.preset-name').addEventListener('click', () => loadPreset(index));
+        item.querySelector('.preset-delete').addEventListener('click', () => deletePreset(index));
+        els.presetList.appendChild(item);
+    });
+}
+
+function loadPreset(index) {
+    const p = state.presets[index];
+    if (!p) return;
+    els.algorithm.value   = p.algorithm;
+    els.maxWidth.value    = p.maxWidth;
+    els.threshold.value   = p.threshold;
+    els.contrast.value    = p.contrast;
+    els.brightness.value  = p.brightness;
+    els.gamma.value       = p.gamma;
+    els.amberMode.checked = p.amberMode;
+    updateValueDisplays();
+    setStatus('PRESET LOADED: ' + p.name, p.algorithm.toUpperCase());
+    if (state.originalImage) processImage();
+}
+
+function deletePreset(index) {
+    state.presets.splice(index, 1);
+    savePresetsToStorage();
+    renderPresets();
+}
+
+els.savePresetBtn.addEventListener('click', () => {
+    const name = els.presetName.value.trim().toUpperCase();
+    if (!name) return;
+    if (state.presets.length >= 6) state.presets.shift();
+    state.presets.push({
+        name, algorithm: els.algorithm.value,
+        maxWidth: els.maxWidth.value, threshold: els.threshold.value,
+        contrast: els.contrast.value, brightness: els.brightness.value,
+        gamma: els.gamma.value, amberMode: els.amberMode.checked
+    });
+    savePresetsToStorage();
+    renderPresets();
+    els.presetName.value = '';
+    setStatus('PRESET SAVED: ' + name, '');
+});
+
+els.dropZone.addEventListener('click', () => els.fileInput.click());
+
+['dragenter','dragover','dragleave','drop'].forEach(evt =>
+    els.dropZone.addEventListener(evt, e => { e.preventDefault(); e.stopPropagation(); })
+);
+['dragenter','dragover'].forEach(evt =>
+    els.dropZone.addEventListener(evt, () => els.dropZone.classList.add('dragover'))
+);
+['dragleave','drop'].forEach(evt =>
+    els.dropZone.addEventListener(evt, () => els.dropZone.classList.remove('dragover'))
+);
+
+els.dropZone.addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) loadImage(f);
+});
+
+els.fileInput.addEventListener('change', e => {
+    if (e.target.files[0]) loadImage(e.target.files[0]);
+});
+
+function loadImage(file) {
+    setStatus('LOADING...', '');
+    const reader = new FileReader();
+    reader.onload = e => {
+        state.originalImage = new Image();
+        state.originalImage.onload = () => {
+            els.emptyState.classList.add('hidden');
+            els.dropZone.classList.add('active');
+            const name = file.name.length > 28 ? file.name.substring(0, 28) + '...' : file.name;
+            els.dropZone.textContent = '[ ' + name + ' ]';
+            els.processBtn.disabled = false;
+            setStatus('IMAGE LOADED', state.originalImage.width + 'x' + state.originalImage.height + ' SOURCE');
+        };
+        state.originalImage.src = e.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+async function processImage() {
+    if (!state.originalImage || state.isProcessing) return;
+    state.isProcessing = true;
+    els.processBtn.disabled = true;
+    els.processBtn.textContent = 'PROCESSING...';
+    setStatus('PROCESSING...', '');
+    await new Promise(r => setTimeout(r, 30));
+    try {
+        const settings = {
+            maxWidth:   parseInt(els.maxWidth.value),
+            algorithm:  els.algorithm.value,
+            contrast:   parseFloat(els.contrast.value),
+            brightness: parseInt(els.brightness.value),
+            gamma:      parseFloat(els.gamma.value),
+            threshold:  parseInt(els.threshold.value),
+            useAmber:   els.amberMode.checked
+        };
+        const result = await state.engine.process(state.originalImage, settings);
+        state.hasProcessed = true;
+        els.statusDims.textContent = 'OUTPUT: ' + result.width + 'x' + result.height + 'px';
+        const opt = els.algorithm.options[els.algorithm.selectedIndex];
+        setStatus('PROCESS COMPLETE', opt.getAttribute('data-label'));
+        if (state.comparisonActive) {
+            setupComparison();
+        } else {
+            els.canvas.classList.remove('hidden');
+            els.compareView.classList.add('hidden');
+        }
+    } catch(err) {
+        setStatus('PROCESSING ERROR', 'CHECK CONSOLE');
+        console.error(err);
+    } finally {
+        state.isProcessing = false;
+        els.processBtn.disabled = false;
+        els.processBtn.textContent = 'PROCESS';
+    }
+}
+
+function setupComparison() {
+    const src = state.engine.canvas;
+    const cc = els.compareCanvas;
+    cc.width = src.width;
+    cc.height = src.height;
+    cc.style.maxWidth = '100%';
+    cc.style.maxHeight = '85vh';
+    cc.style.display = 'block';
+    cc.getContext('2d').drawImage(src, 0, 0);
+    els.compareOriginalImg.src = state.originalImage.src;
+    updateComparisonPosition(state.comparisonRatio);
+    els.canvas.classList.add('hidden');
+    els.compareView.classList.remove('hidden');
+}
+
+function updateComparisonPosition(ratio) {
+    const rect = els.compareView.getBoundingClientRect();
+    const containerW = rect.width || els.compareCanvas.offsetWidth || 400;
+    const px = containerW * ratio;
+    els.compareOriginal.style.width = px + 'px';
+    els.compareSlider.style.left = px + 'px';
+    els.compareOriginalImg.style.width = containerW + 'px';
+    els.compareOriginalImg.style.maxWidth = 'none';
+}
+
+let isDragging = false;
+
+els.compareSlider.addEventListener('mousedown', e => { isDragging = true; e.preventDefault(); });
+document.addEventListener('mouseup', () => { isDragging = false; });
+document.addEventListener('mousemove', e => {
+    if (!isDragging || !state.comparisonActive) return;
+    const rect = els.compareView.getBoundingClientRect();
+    state.comparisonRatio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+    updateComparisonPosition(state.comparisonRatio);
+});
+
+els.compareSlider.addEventListener('touchstart', e => { isDragging = true; e.preventDefault(); }, { passive: false });
+document.addEventListener('touchend', () => { isDragging = false; });
+document.addEventListener('touchmove', e => {
+    if (!isDragging || !state.comparisonActive) return;
+    const rect = els.compareView.getBoundingClientRect();
+    state.comparisonRatio = Math.max(0, Math.min(1, (e.touches[0].clientX - rect.left) / rect.width));
+    updateComparisonPosition(state.comparisonRatio);
+}, { passive: false });
+
+els.comparisonMode.addEventListener('change', () => {
+    state.comparisonActive = els.comparisonMode.checked;
+    if (state.comparisonActive && state.hasProcessed) {
+        setupComparison();
+    } else if (!state.comparisonActive) {
+        els.compareView.classList.add('hidden');
+        if (state.hasProcessed) els.canvas.classList.remove('hidden');
+    }
+});
+
+els.amberMode.addEventListener('change', () => {
+    if (state.hasProcessed) processImage();
+});
+
+els.processBtn.addEventListener('click', processImage);
+
+els.downloadBtn.addEventListener('click', () => {
+    if (!state.originalImage || !state.hasProcessed) {
+        setStatus('ERROR: NO PROCESSED IMAGE', 'LOAD AND PROCESS BEFORE EXPORT');
+        setTimeout(() => setStatus('SYSTEM READY', 'AWAITING INPUT'), 2500);
+        return;
+    }
+    const link = document.createElement('a');
+    link.download = 'DITHER_' + Date.now() + '.png';
+    link.href = state.engine.canvas.toDataURL('image/png');
+    link.click();
+    setStatus('EXPORTED', link.download);
+});
+
+document.addEventListener('keydown', e => {
+    if (e.ctrlKey && e.key === 's') { e.preventDefault(); els.downloadBtn.click(); }
+    if (e.ctrlKey && e.key === 'Enter') { e.preventDefault(); if (!els.processBtn.disabled) processImage(); }
+});
+
+loadPresets();
+updateValueDisplays();
+setStatus('SYSTEM READY', 'AWAITING INPUT');
+</script>
+
+</body>
+</html>

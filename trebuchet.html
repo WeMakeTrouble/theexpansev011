@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Tanuki Trebuchet — Ballistics Lab</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Instrument+Serif&display=swap');
+  
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  
+  body {
+    background: #0b0c10;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+    font-family: 'DM Sans', sans-serif;
+    user-select: none;
+    color: #e0ddd5;
+  }
+  
+  canvas {
+    display: block;
+    width: 100vw;
+    height: 100vh;
+  }
+  
+  #ui-layer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    pointer-events: none;
+    z-index: 10;
+  }
+  
+  .panel {
+    position: absolute;
+    background: rgba(14, 15, 20, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 12px;
+    padding: 18px;
+    backdrop-filter: blur(16px);
+    pointer-events: auto;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  }
+  
+  #controls {
+    top: 20px;
+    left: 20px;
+    width: 280px;
+  }
+  
+  #telemetry {
+    top: 20px;
+    right: 20px;
+    width: 220px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+  }
+  
+  #instructions {
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    text-align: center;
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 12px;
+    pointer-events: none;
+    letter-spacing: 0.3px;
+  }
+  
+  h1 {
+    font-family: 'Instrument Serif', serif;
+    font-size: 18px;
+    font-weight: 400;
+    color: #f0ece4;
+    margin-bottom: 16px;
+    letter-spacing: 0.3px;
+  }
+  
+  .control-group {
+    margin-bottom: 14px;
+  }
+  .control-group:last-child { margin-bottom: 0; }
+  
+  label {
+    display: block;
+    font-size: 10px;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 500;
+  }
+  
+  input[type="range"] {
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 2px;
+    outline: none;
+    -webkit-appearance: none;
+    cursor: pointer;
+  }
+  
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px;
+    height: 14px;
+    background: #d4956a;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #0b0c10;
+    transition: background 0.15s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    background: #e8a87c;
+  }
+  
+  input[type="range"]::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    background: #d4956a;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid #0b0c10;
+  }
+  
+  .value-display {
+    float: right;
+    color: #d4956a;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  
+  .btn-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 4px;
+  }
+  
+  button {
+    flex: 1;
+    padding: 10px 12px;
+    background: #d4956a;
+    color: #0b0c10;
+    border: none;
+    border-radius: 8px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+  }
+  
+  button:hover { background: #e8a87c; }
+  button:active { transform: scale(0.97); }
+  button:disabled {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.2);
+    cursor: not-allowed;
+  }
+  
+  button.secondary {
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(255, 255, 255, 0.5);
+  }
+  button.secondary:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.7);
+  }
+  
+  .metric {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 7px;
+    color: rgba(255, 255, 255, 0.4);
+    font-size: 11px;
+  }
+  .metric:last-child { margin-bottom: 0; }
+  
+  .metric-value {
+    color: #c8c4bc;
+    font-weight: 500;
+  }
+  .metric-value.highlight { color: #d4956a; }
+  .metric-value.warning { color: #e8c264; }
+  
+  .divider {
+    border: none;
+    border-top: 1px solid rgba(255,255,255,0.05);
+    margin: 10px 0;
+  }
+  
+  #status {
+    position: absolute;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 7px 18px;
+    background: rgba(212, 149, 106, 0.12);
+    border: 1px solid rgba(212, 149, 106, 0.25);
+    border-radius: 20px;
+    color: #d4956a;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    opacity: 0;
+    transition: opacity 0.3s;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  #status.visible { opacity: 1; }
+  #status.firing {
+    background: rgba(232, 100, 100, 0.12);
+    border-color: rgba(232, 100, 100, 0.25);
+    color: #e86464;
+  }
+  #status.landed {
+    background: rgba(100, 200, 130, 0.12);
+    border-color: rgba(100, 200, 130, 0.25);
+    color: #64c882;
+  }
+  
+  @media (max-width: 700px) {
+    #controls { width: 240px; left: 10px; top: 10px; padding: 14px; }
+    #telemetry { width: 180px; right: 10px; top: 10px; padding: 14px; }
+    h1 { font-size: 15px; margin-bottom: 12px; }
+    label { font-size: 9px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="ui-layer">
+  <div id="status">Ready</div>
+  
+  <div id="controls" class="panel">
+    <h1>Trebuchet Controls</h1>
+    
+    <div class="control-group">
+      <label>Counterweight Mass <span class="value-display" id="val-mass">2000 kg</span></label>
+      <input type="range" id="mass" min="500" max="5000" value="2000" step="100">
+    </div>
+    
+    <div class="control-group">
+      <label>Projectile Mass <span class="value-display" id="val-proj">15 kg</span></label>
+      <input type="range" id="proj-mass" min="5" max="100" value="15" step="5">
+    </div>
+    
+    <div class="control-group">
+      <label>Arm Ratio (Long:Short) <span class="value-display" id="val-ratio">4.0:1</span></label>
+      <input type="range" id="ratio" min="2.5" max="6" value="4" step="0.1">
+    </div>
+    
+    <div class="control-group">
+      <label>Sling Length <span class="value-display" id="val-sling">6.0 m</span></label>
+      <input type="range" id="sling" min="3" max="12" value="6" step="0.5">
+    </div>
+    
+    <div class="control-group">
+      <label>Release Angle <span class="value-display" id="val-release">42°</span></label>
+      <input type="range" id="release-angle" min="25" max="65" value="42" step="1">
+    </div>
+    
+    <div class="btn-row">
+      <button id="fire-btn">🔥 Fire</button>
+      <button id="reset-btn" class="secondary">↺ Reset</button>
+    </div>
+  </div>
+  
+  <div id="telemetry" class="panel">
+    <h1>Telemetry</h1>
+    <div class="metric">Phase <span class="metric-value" id="tel-phase">Ready</span></div>
+    <div class="metric">Time <span class="metric-value" id="tel-time">0.00 s</span></div>
+    <hr class="divider">
+    <div class="metric">Arm ω <span class="metric-value" id="tel-arm-vel">0°/s</span></div>
+    <div class="metric">Sling T <span class="metric-value" id="tel-tension">0 kN</span></div>
+    <div class="metric">Proj Speed <span class="metric-value highlight" id="tel-proj-vel">0 m/s</span></div>
+    <div class="metric">Altitude <span class="metric-value" id="tel-alt">0 m</span></div>
+    <hr class="divider">
+    <div class="metric">Range <span class="metric-value highlight" id="tel-range">—</span></div>
+    <div class="metric">Max Height <span class="metric-value" id="tel-max-h">—</span></div>
+    <div class="metric">Efficiency <span class="metric-value warning" id="tel-eff">—</span></div>
+    <div class="metric">Hits <span class="metric-value" id="tel-hits">0 / 0</span></div>
+  </div>
+  
+  <div id="instructions">
+    Click ground to place targets · Scroll to zoom · Drag to pan
+  </div>
+</div>
+
+<canvas id="canvas"></canvas>
+
+<script>
+// ============================================================
+// TANUKI TREBUCHET — BALLISTICS LAB
+// Lagrangian-derived trebuchet physics with sling dynamics
+// Coordinate: +x right, +y up, ground at y=0
+// ============================================================
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+const G = 9.81;
+const PPM = 3.5; // pixels per meter at zoom=1
+
+let W, H, dpr;
+let camera = { x: 0, y: 0, zoom: 1, targetZoom: 1, targetX: 0, targetY: 0 };
+let lastTime = 0;
+
+// ---- Trebuchet design parameters ----
+const P = {
+  cwMass: 2000,
+  projMass: 15,
+  armMass: 80,
+  armLong: 8,       // long arm (projectile side)
+  armShort: 2,      // short arm (CW side)
+  slingLen: 6,
+  pivotH: 6,        // pivot height above ground
+  cwHang: 2.0,      // CW hangs below short arm end
+  releaseAngle: 42 * Math.PI / 180,
+};
+
+// ---- Dynamic state ----
+let S = {};
+let trail = [];
+let targets = [];
+let particles = [];
+let maxHeight = 0;
+let launchSpeed = 0;
+let hitCount = 0;
+
+// ---- UI refs ----
+const $ = id => document.getElementById(id);
+const ui = {
+  mass: $('mass'), projMass: $('proj-mass'), ratio: $('ratio'),
+  sling: $('sling'), releaseAngle: $('release-angle'),
+  fireBtn: $('fire-btn'), resetBtn: $('reset-btn'), status: $('status'),
+  valMass: $('val-mass'), valProj: $('val-proj'), valRatio: $('val-ratio'),
+  valSling: $('val-sling'), valRelease: $('val-release'),
+  telPhase: $('tel-phase'), telTime: $('tel-time'),
+  telArmVel: $('tel-arm-vel'), telTension: $('tel-tension'),
+  telProjVel: $('tel-proj-vel'), telAlt: $('tel-alt'),
+  telRange: $('tel-range'), telMaxH: $('tel-max-h'),
+  telEff: $('tel-eff'), telHits: $('tel-hits'),
+};
+
+// ============================================================
+// INIT
+// ============================================================
+function resize() {
+  dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  canvas.style.width = W + 'px';
+  canvas.style.height = H + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+
+function init() {
+  resize();
+  window.addEventListener('resize', resize);
+  
+  // Default targets
+  addTarget(80);
+  addTarget(150);
+  addTarget(250);
+  addTarget(400);
+  
+  setupInput();
+  resetState();
+  requestAnimationFrame(loop);
+}
+
+function resetState() {
+  S = {
+    // armAngle: angle of arm from vertical-up. 
+    // Positive = CW side (short arm) tilted down/right (cocked position)
+    // Negative = CW side up (fired position)
+    armAngle: Math.PI * 0.42, // cocked back ~76°
+    armOmega: 0,
+    
+    // sling angle relative to long-arm direction (0 = extends arm line)
+    slingAngle: -0.3, // tucked back
+    slingOmega: 0,
+    
+    // CW pendulum angle from vertical (0 = straight down)
+    cwAngle: 0,
+    cwOmega: 0,
+    
+    released: false,
+    projPos: { x: 0, y: 0 },
+    projVel: { x: 0, y: 0 },
+    
+    time: 0,
+    phase: 'ready', // ready | firing | flying | landed
+    tension: 0,
+  };
+  
+  trail = [];
+  particles = [];
+  maxHeight = 0;
+  launchSpeed = 0;
+  
+  ui.fireBtn.disabled = false;
+  ui.status.textContent = 'READY';
+  ui.status.className = 'visible';
+  ui.telRange.textContent = '—';
+  ui.telMaxH.textContent = '—';
+  ui.telEff.textContent = '—';
+  
+  hitCount = 0;
+  targets.forEach(t => { t.hit = false; t.flash = 0; });
+  updateHitDisplay();
+  
+  // Camera to start position
+  camera.targetZoom = 1;
+  camera.targetX = W * 0.28;
+  camera.targetY = H * 0.72;
+  camera.x = camera.targetX;
+  camera.y = camera.targetY;
+}
+
+// ============================================================
+// GEOMETRY — compute positions from state
+// ============================================================
+function getGeo() {
+  const pivot = { x: 0, y: P.pivotH };
+  
+  const a = S.armAngle;
+  // Long arm tip: pivot + longArm in direction of armAngle from vertical
+  const tipX = pivot.x + P.armLong * Math.sin(a);
+  const tipY = pivot.y - P.armLong * Math.cos(a);
+  
+  // Short arm end (CW side): opposite direction
+  const baseX = pivot.x - P.armShort * Math.sin(a);
+  const baseY = pivot.y + P.armShort * Math.cos(a);
+  
+  // CW position: hangs from base
+  const cwX = baseX + P.cwHang * Math.sin(S.cwAngle);
+  const cwY = baseY - P.cwHang * Math.cos(S.cwAngle);
+  
+  // Projectile (if attached)
+  let projX, projY;
+  if (!S.released) {
+    const sa = a + S.slingAngle;
+    projX = tipX + P.slingLen * Math.sin(sa);
+    projY = tipY - P.slingLen * Math.cos(sa);
+  } else {
+    projX = S.projPos.x;
+    projY = S.projPos.y;
+  }
+  
+  return {
+    pivot, 
+    tip: { x: tipX, y: tipY },
+    base: { x: baseX, y: baseY },
+    cw: { x: cwX, y: cwY },
+    proj: { x: projX, y: projY },
+  };
+}
+
+function getGeoAtAngle(angle) {
+  const pivot = { x: 0, y: P.pivotH };
+  const base = {
+    x: pivot.x - P.armShort * Math.sin(angle),
+    y: pivot.y + P.armShort * Math.cos(angle),
+  };
+  return {
+    cw: { x: base.x, y: base.y - P.cwHang },
+  };
+}
+
+// ============================================================
+// PHYSICS — simplified Lagrangian approach
+// ============================================================
+function computeAccelerations() {
+  const theta = S.armAngle;      // arm angle
+  const thetaDot = S.armOmega;
+  const phi = S.slingAngle;      // sling relative to arm
+  const phiDot = S.slingOmega;
+  const psi = S.cwAngle;         // CW pendulum
+  const psiDot = S.cwOmega;
+  
+  const L1 = P.armLong;
+  const L2 = P.armShort;
+  const Ls = P.slingLen;
+  const Lc = P.cwHang;
+  const Mcw = P.cwMass;
+  const Mp = P.projMass;
+  const Ma = P.armMass;
+  
+  // ---- ARM TORQUE ----
+  // Arm center of mass offset from pivot (positive toward long arm)
+  const totalLen = L1 + L2;
+  const cmOff = (L1 - L2) / 2;
+  
+  // Arm moment of inertia about pivot
+  const Iarm = (Ma * totalLen * totalLen / 12) + Ma * cmOff * cmOff;
+  
+  // Gravity torque on arm CM
+  const tauArmGrav = -Ma * G * cmOff * Math.sin(theta);
+  
+  // CW gravity torque: CW pulls down on the short arm side
+  // Effective lever arm of CW about pivot
+  const cwEffX = -(L2 * Math.sin(theta)) + Lc * Math.sin(psi);
+  const tauCW = Mcw * G * L2 * Math.sin(theta) - Mcw * G * Lc * Math.sin(psi) * 0;
+  // Simpler: CW at distance L2 from pivot, gravity pulls it down
+  // Torque = +Mcw * G * L2 * sin(theta) (positive when theta>0, drives arm to theta=0)
+  const tauCWsimple = Mcw * G * L2 * Math.sin(theta);
+  
+  // Projectile torque (if attached)
+  let tauProj = 0;
+  let Iproj = 0;
+  if (!S.released) {
+    // Projectile at end of sling, at effective distance from pivot
+    tauProj = -Mp * G * L1 * Math.sin(theta) - Mp * G * Ls * Math.sin(theta + phi);
+    // Effective inertia contribution
+    Iproj = Mp * (L1 * L1 + Ls * Ls + 2 * L1 * Ls * Math.cos(phi));
+  }
+  
+  const Itotal = Iarm + Mcw * L2 * L2 + Iproj;
+  
+  // Total arm angular acceleration
+  const thetaDDot = (tauArmGrav + tauCWsimple + tauProj) / Itotal;
+  
+  // ---- CW PENDULUM ----
+  // Simplified: gravity restoring + coupling from arm acceleration
+  const psiDDot = -(G / Lc) * Math.sin(psi) + (L2 / Lc) * thetaDDot * Math.cos(psi - theta) * 0.3;
+  
+  // ---- SLING ----
+  let phiDDot = 0;
+  let tension = 0;
+  if (!S.released) {
+    const totalA = theta + phi;
+    // Gravity component perpendicular to sling
+    const gPerp = -(G / Ls) * Math.sin(totalA);
+    // Centripetal acceleration from arm rotation at tip
+    const centripetal = (L1 * thetaDot * thetaDot / Ls) * Math.sin(phi);
+    // Coriolis
+    const coriolis = -2 * thetaDot * phiDot;
+    // Arm angular acceleration coupling
+    const coupling = -(L1 / Ls) * thetaDDot * Math.cos(phi);
+    
+    phiDDot = gPerp + centripetal + coriolis + coupling * 0.5;
+    
+    // Tension for telemetry
+    const vTotal = (thetaDot + phiDot) * Ls;
+    tension = Mp * (G * Math.cos(totalA) + vTotal * vTotal / Ls);
+  }
+  
+  return { thetaDDot, phiDDot, psiDDot, tension };
+}
+
+function stepPhysics(dt) {
+  if (S.phase === 'ready' || S.phase === 'landed') return;
+  
+  const substeps = 12;
+  const subDt = dt / substeps;
+  
+  for (let i = 0; i < substeps; i++) {
+    if (S.phase === 'firing' && !S.released) {
+      const acc = computeAccelerations();
+      
+      // Symplectic Euler integration
+      S.armOmega += acc.thetaDDot * subDt;
+      S.slingOmega += acc.phiDDot * subDt;
+      S.cwOmega += acc.psiDDot * subDt;
+      
+      S.armAngle += S.armOmega * subDt;
+      S.slingAngle += S.slingOmega * subDt;
+      S.cwAngle += S.cwOmega * subDt;
+      
+      // Light damping for stability
+      S.armOmega *= 0.9998;
+      S.slingOmega *= 0.9996;
+      S.cwOmega *= 0.9990;
+      
+      S.tension = Math.max(0, acc.tension);
+      
+      // ---- CHECK RELEASE ----
+      // Release when the sling + arm direction hits release angle above horizontal
+      const totalAngle = S.armAngle + S.slingAngle;
+      const angleFromHoriz = Math.PI / 2 - totalAngle;
+      
+      // Release conditions: angle is right AND arm is swinging forward
+      if (angleFromHoriz >= P.releaseAngle && S.armOmega < -0.5 && S.time > 0.05) {
+        doRelease();
+      }
+      
+      // Safety: if arm swings too far, force release
+      if (S.armAngle < -Math.PI * 0.35 && !S.released && S.time > 0.05) {
+        doRelease();
+      }
+    }
+    
+    // ---- PROJECTILE FREE FLIGHT ----
+    if (S.released && S.phase !== 'landed') {
+      // Air resistance (light)
+      const speed = Math.sqrt(S.projVel.x ** 2 + S.projVel.y ** 2);
+      const dragCoeff = 0.0002; // Very light drag
+      const drag = dragCoeff * speed;
+      
+      if (speed > 0) {
+        S.projVel.x -= drag * S.projVel.x / speed * subDt;
+        S.projVel.y -= drag * S.projVel.y / speed * subDt;
+      }
+      
+      S.projVel.y -= G * subDt;
+      S.projPos.x += S.projVel.x * subDt;
+      S.projPos.y += S.projVel.y * subDt;
+      
+      maxHeight = Math.max(maxHeight, S.projPos.y);
+      
+      // Trail points
+      if (i % 3 === 0) {
+        trail.push({
+          x: S.projPos.x, y: S.projPos.y,
+          t: S.time,
+          v: speed,
+        });
+        if (trail.length > 400) trail.shift();
+      }
+      
+      // Ground hit
+      if (S.projPos.y <= 0 && S.projVel.y < 0) {
+        S.projPos.y = 0;
+        spawnImpact(S.projPos.x, speed);
+        
+        S.projVel.y *= -0.3;
+        S.projVel.x *= 0.5;
+        
+        if (Math.abs(S.projVel.y) < 0.8 && Math.abs(S.projVel.x) < 0.5) {
+          S.phase = 'landed';
+          ui.status.textContent = `LANDED — ${Math.round(S.projPos.x)} m`;
+          ui.status.className = 'visible landed';
+          ui.fireBtn.disabled = false;
+          ui.telMaxH.textContent = Math.round(maxHeight) + ' m';
+        }
+      }
+      
+      // Out of bounds
+      if (S.projPos.x > 3000 || S.projPos.y < -50) {
+        S.phase = 'landed';
+        ui.fireBtn.disabled = false;
+      }
+    }
+    
+    // Continue arm swing after release (for visual)
+    if (S.released && S.phase === 'firing') {
+      S.armOmega *= 0.98; // Dampen after release
+      S.armAngle += S.armOmega * subDt;
+      S.cwOmega *= 0.98;
+      S.cwAngle += S.cwOmega * subDt;
+      
+      // Transition to flying phase after a moment
+      if (S.time > 0.5 && S.released) {
+        S.phase = 'flying';
+      }
+    }
+    
+    S.time += subDt;
+  }
+}
+
+function doRelease() {
+  const geo = getGeo();
+  
+  // Velocity of arm tip
+  const vtipX = S.armOmega * P.armLong * Math.cos(S.armAngle);
+  const vtipY = S.armOmega * P.armLong * Math.sin(S.armAngle);
+  
+  // Velocity from sling rotation (relative to tip)
+  const totalA = S.armAngle + S.slingAngle;
+  const totalOmega = S.armOmega + S.slingOmega;
+  const vslingX = totalOmega * P.slingLen * Math.cos(totalA);
+  const vslingY = totalOmega * P.slingLen * Math.sin(totalA);
+  
+  S.released = true;
+  S.projPos = { x: geo.proj.x, y: Math.max(0.5, geo.proj.y) };
+  S.projVel = { x: vtipX + vslingX, y: vtipY + vslingY };
+  
+  // Ensure reasonable velocity direction (should go to the right and up)
+  // If physics glitched, use energy-based fallback
+  const speed = Math.sqrt(S.projVel.x ** 2 + S.projVel.y ** 2);
+  if (speed < 5 || S.projVel.x < 0) {
+    // Fallback: energy-based estimate
+    const cockedGeo = getGeoAtAngle(Math.PI * 0.42);
+    const currentGeo = getGeoAtAngle(S.armAngle);
+    const hDrop = Math.max(1, cockedGeo.cw.y - currentGeo.cw.y);
+    const PE = P.cwMass * G * hDrop;
+    const vEst = Math.sqrt(2 * PE * 0.55 / P.projMass);
+    const angle = P.releaseAngle;
+    S.projVel = { x: vEst * Math.cos(angle), y: vEst * Math.sin(angle) };
+  }
+  
+  launchSpeed = Math.sqrt(S.projVel.x ** 2 + S.projVel.y ** 2);
+  
+  // Calculate metrics
+  const launchAngle = Math.atan2(S.projVel.y, S.projVel.x);
+  const range = (launchSpeed * launchSpeed * Math.sin(2 * launchAngle)) / G +
+                S.projPos.y * S.projVel.x / S.projVel.y; // Height correction
+  
+  const cockedGeo = getGeoAtAngle(Math.PI * 0.42);
+  const hDrop = Math.max(0, cockedGeo.cw.y - geo.cw.y);
+  const PE = P.cwMass * G * hDrop;
+  const KE = 0.5 * P.projMass * launchSpeed * launchSpeed;
+  const eff = PE > 0 ? (KE / PE) * 100 : 0;
+  
+  ui.telRange.textContent = Math.round(Math.max(0, range)) + ' m';
+  ui.telEff.textContent = Math.min(99, eff).toFixed(1) + '%';
+  ui.status.textContent = `LAUNCHED — ${launchSpeed.toFixed(0)} m/s`;
+  ui.status.className = 'visible firing';
+  
+  // Zoom out to follow
+  camera.targetZoom = Math.max(0.25, Math.min(0.8, 300 / Math.max(100, range)));
+}
+
+function spawnImpact(x, speed) {
+  if (speed < 3) return;
+  const n = Math.min(20, Math.floor(speed / 3));
+  for (let i = 0; i < n; i++) {
+    particles.push({
+      x, y: 0,
+      vx: (Math.random() - 0.5) * speed * 0.25,
+      vy: Math.random() * speed * 0.4 + 2,
+      life: 1,
+      size: Math.random() * 0.3 + 0.1,
+      color: Math.random() > 0.5 ? '#c4a97d' : '#8b7355',
+    });
+  }
+  
+  // Check target hits
+  for (const t of targets) {
+    if (t.hit) continue;
+    if (Math.abs(x - t.x) < t.w * 0.6 + 1) {
+      t.hit = true;
+      t.flash = 1;
+      hitCount++;
+      updateHitDisplay();
+      // Extra particles for hit
+      for (let i = 0; i < 8; i++) {
+        particles.push({
+          x: t.x, y: t.h * 0.5,
+          vx: (Math.random() - 0.5) * 12,
+          vy: Math.random() * 10 + 3,
+          life: 1, size: 0.3,
+          color: '#e86464',
+        });
+      }
+    }
+  }
+}
+
+function updateHitDisplay() {
+  ui.telHits.textContent = `${hitCount} / ${targets.length}`;
+}
+
+// ============================================================
+// COORDINATE TRANSFORMS
+// ============================================================
+function w2s(x, y) {
+  return {
+    x: x * PPM * camera.zoom + camera.x,
+    y: H - (y * PPM * camera.zoom + camera.y),
+  };
+}
+
+function s2w(sx, sy) {
+  return {
+    x: (sx - camera.x) / (PPM * camera.zoom),
+    y: (H - sy - camera.y) / (PPM * camera.zoom),
+  };
+}
+
+// ============================================================
+// RENDERING
+// ============================================================
+function drawSky() {
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0b0c10');
+  grad.addColorStop(0.4, '#12131a');
+  grad.addColorStop(0.7, '#1a1b24');
+  grad.addColorStop(1, '#1f1a14');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+  
+  // Stars
+  if (!drawSky._stars) {
+    drawSky._stars = [];
+    for (let i = 0; i < 80; i++) {
+      drawSky._stars.push({
+        x: Math.random() * W,
+        y: Math.random() * H * 0.6,
+        r: Math.random() * 1.2 + 0.3,
+        flicker: Math.random() * Math.PI * 2,
+      });
+    }
+  }
+  for (const star of drawSky._stars) {
+    const a = 0.3 + 0.2 * Math.sin(star.flicker + S.time * 0.5);
+    ctx.fillStyle = `rgba(255,250,240,${a})`;
+    ctx.beginPath();
+    ctx.arc(star.x, star.y, star.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawGround() {
+  const gndLeft = w2s(-100, 0);
+  const gndRight = w2s(3000, 0);
+  
+  // Ground fill
+  const grad = ctx.createLinearGradient(0, gndLeft.y - 2, 0, gndLeft.y + 60);
+  grad.addColorStop(0, '#3a4a28');
+  grad.addColorStop(0.03, '#2a3a1c');
+  grad.addColorStop(0.15, '#1e2814');
+  grad.addColorStop(1, '#0b0c10');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, gndLeft.y - 2, W, H - gndLeft.y + 10);
+  
+  // Ground line
+  ctx.strokeStyle = '#4a6a30';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, gndLeft.y);
+  ctx.lineTo(W, gndRight.y);
+  ctx.stroke();
+}
+
+function drawGrid() {
+  ctx.font = '10px JetBrains Mono';
+  ctx.textAlign = 'center';
+  
+  // Distance markers
+  const intervals = camera.zoom > 0.5 ? 50 : (camera.zoom > 0.25 ? 100 : 200);
+  for (let x = 0; x <= 2000; x += intervals) {
+    const p = w2s(x, 0);
+    if (p.x < -50 || p.x > W + 50) continue;
+    
+    // Vertical gridline
+    ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(p.x, 0);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    
+    // Label
+    ctx.fillStyle = 'rgba(255,255,255,0.18)';
+    ctx.fillText(x + 'm', p.x, p.y + 16);
+  }
+}
+
+function drawTrebuchet() {
+  const geo = getGeo();
+  const z = camera.zoom;
+  
+  const pivot = w2s(geo.pivot.x, geo.pivot.y);
+  const tip = w2s(geo.tip.x, geo.tip.y);
+  const base = w2s(geo.base.x, geo.base.y);
+  const cw = w2s(geo.cw.x, geo.cw.y);
+  const ground = w2s(0, 0);
+  
+  const frameW = 3 * PPM * z;
+  
+  // ---- A-Frame ----
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  
+  // Shadow
+  ctx.strokeStyle = 'rgba(0,0,0,0.3)';
+  ctx.lineWidth = 6 * z;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x - frameW + 2, ground.y + 2);
+  ctx.lineTo(pivot.x + 2, pivot.y + 2);
+  ctx.lineTo(pivot.x + frameW + 2, ground.y + 2);
+  ctx.stroke();
+  
+  // Dark wood
+  ctx.strokeStyle = '#3a2e22';
+  ctx.lineWidth = 6 * z;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x - frameW, ground.y);
+  ctx.lineTo(pivot.x, pivot.y);
+  ctx.lineTo(pivot.x + frameW, ground.y);
+  ctx.stroke();
+  
+  // Light wood overlay
+  ctx.strokeStyle = '#5a4a3a';
+  ctx.lineWidth = 4 * z;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x - frameW, ground.y);
+  ctx.lineTo(pivot.x, pivot.y);
+  ctx.lineTo(pivot.x + frameW, ground.y);
+  ctx.stroke();
+  
+  // Cross brace
+  const braceY = ground.y + (pivot.y - ground.y) * 0.35;
+  ctx.strokeStyle = '#4a3a2a';
+  ctx.lineWidth = 3 * z;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x - frameW * 0.55, braceY);
+  ctx.lineTo(pivot.x + frameW * 0.55, braceY);
+  ctx.stroke();
+  
+  // Base beam
+  ctx.strokeStyle = '#4a3a2a';
+  ctx.lineWidth = 5 * z;
+  ctx.beginPath();
+  ctx.moveTo(pivot.x - frameW * 1.1, ground.y);
+  ctx.lineTo(pivot.x + frameW * 1.1, ground.y);
+  ctx.stroke();
+  
+  // ---- ARM ----
+  // Shadow
+  ctx.strokeStyle = 'rgba(0,0,0,0.25)';
+  ctx.lineWidth = 8 * z;
+  ctx.beginPath();
+  ctx.moveTo(base.x + 2, base.y + 2);
+  ctx.lineTo(tip.x + 2, tip.y + 2);
+  ctx.stroke();
+  
+  // Main arm
+  ctx.strokeStyle = '#6b5344';
+  ctx.lineWidth = 7 * z;
+  ctx.beginPath();
+  ctx.moveTo(base.x, base.y);
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+  
+  ctx.strokeStyle = '#8b7355';
+  ctx.lineWidth = 5 * z;
+  ctx.beginPath();
+  ctx.moveTo(base.x, base.y);
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+  
+  // Highlight
+  ctx.strokeStyle = '#a08a6a';
+  ctx.lineWidth = 2 * z;
+  ctx.beginPath();
+  ctx.moveTo(base.x, base.y);
+  ctx.lineTo(tip.x, tip.y);
+  ctx.stroke();
+  
+  // ---- PIVOT PIN ----
+  ctx.fillStyle = '#666';
+  ctx.beginPath();
+  ctx.arc(pivot.x, pivot.y, 5 * z, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#999';
+  ctx.beginPath();
+  ctx.arc(pivot.x, pivot.y, 3 * z, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // ---- CW ROPE ----
+  ctx.strokeStyle = '#a08860';
+  ctx.lineWidth = 2 * z;
+  ctx.beginPath();
+  ctx.moveTo(base.x, base.y);
+  ctx.lineTo(cw.x, cw.y);
+  ctx.stroke();
+  
+  // ---- COUNTERWEIGHT ----
+  const cwSize = (8 + Math.sqrt(P.cwMass) * 0.25) * z;
+  
+  // Shadow
+  ctx.fillStyle = 'rgba(0,0,0,0.3)';
+  ctx.beginPath();
+  ctx.roundRect(cw.x - cwSize / 2 + 2, cw.y - cwSize / 2 + 2, cwSize, cwSize, 3 * z);
+  ctx.fill();
+  
+  // Block
+  const cwGrad = ctx.createLinearGradient(cw.x - cwSize / 2, cw.y - cwSize / 2, cw.x + cwSize / 2, cw.y + cwSize / 2);
+  cwGrad.addColorStop(0, '#4a4a5a');
+  cwGrad.addColorStop(0.5, '#3a3a4a');
+  cwGrad.addColorStop(1, '#2a2a3a');
+  ctx.fillStyle = cwGrad;
+  ctx.beginPath();
+  ctx.roundRect(cw.x - cwSize / 2, cw.y - cwSize / 2, cwSize, cwSize, 3 * z);
+  ctx.fill();
+  
+  ctx.strokeStyle = '#5a5a6a';
+  ctx.lineWidth = 1.5 * z;
+  ctx.beginPath();
+  ctx.roundRect(cw.x - cwSize / 2, cw.y - cwSize / 2, cwSize, cwSize, 3 * z);
+  ctx.stroke();
+  
+  // CW mass label
+  if (z > 0.5) {
+    ctx.fillStyle = 'rgba(255,255,255,0.3)';
+    ctx.font = `${Math.round(8 * z)}px JetBrains Mono`;
+    ctx.textAlign = 'center';
+    ctx.fillText(P.cwMass + 'kg', cw.x, cw.y + 3 * z);
+  }
+  
+  // ---- SLING ----
+  if (!S.released) {
+    const proj = w2s(geo.proj.x, geo.proj.y);
+    
+    // Sling rope with sag
+    ctx.strokeStyle = '#b09060';
+    ctx.lineWidth = 2 * z;
+    ctx.beginPath();
+    ctx.moveTo(tip.x, tip.y);
+    
+    const midX = (tip.x + proj.x) / 2;
+    const midY = (tip.y + proj.y) / 2;
+    const sag = Math.max(0, -S.slingAngle * 8 * z);
+    ctx.quadraticCurveTo(midX, midY + sag, proj.x, proj.y);
+    ctx.stroke();
+    
+    // Pouch
+    ctx.fillStyle = '#8b6914';
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, 5 * z, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#a07a1a';
+    ctx.beginPath();
+    ctx.arc(proj.x, proj.y, 3 * z, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+function drawProjectile() {
+  const geo = getGeo();
+  const pos = w2s(geo.proj.x, geo.proj.y);
+  const r = 4 * camera.zoom;
+  
+  // ---- TRAIL ----
+  if (trail.length > 1) {
+    ctx.lineCap = 'round';
+    for (let i = 1; i < trail.length; i++) {
+      const t0 = trail[i - 1], t1 = trail[i];
+      const p0 = w2s(t0.x, t0.y), p1 = w2s(t1.x, t1.y);
+      
+      const age = (S.time - t0.t) / 6;
+      const alpha = Math.max(0, 1 - age) * 0.5;
+      if (alpha <= 0) continue;
+      
+      const w = Math.max(1, (t0.v / 60) * camera.zoom * 2);
+      ctx.strokeStyle = `rgba(212,149,106,${alpha})`;
+      ctx.lineWidth = w;
+      ctx.beginPath();
+      ctx.moveTo(p0.x, p0.y);
+      ctx.lineTo(p1.x, p1.y);
+      ctx.stroke();
+    }
+  }
+  
+  // ---- SHADOW ON GROUND ----
+  if (S.released && S.projPos.y > 0) {
+    const groundPos = w2s(S.projPos.x, 0);
+    const shadowScale = Math.max(0, 1 - S.projPos.y / 80);
+    if (shadowScale > 0) {
+      ctx.fillStyle = `rgba(0,0,0,${0.25 * shadowScale})`;
+      ctx.beginPath();
+      ctx.ellipse(groundPos.x, groundPos.y, r * 3 * shadowScale, r * 0.5 * shadowScale, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  
+  // ---- PROJECTILE ----
+  const grad = ctx.createRadialGradient(pos.x - r * 0.3, pos.y - r * 0.3, r * 0.2, pos.x, pos.y, r);
+  grad.addColorStop(0, '#ffd8a0');
+  grad.addColorStop(0.4, '#d4713a');
+  grad.addColorStop(1, '#8b4513');
+  
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.arc(pos.x, pos.y, r, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Motion streak
+  if (S.released && S.phase !== 'landed') {
+    const v = Math.sqrt(S.projVel.x ** 2 + S.projVel.y ** 2);
+    if (v > 20) {
+      const blurLen = Math.min(v * 0.06, 30) * camera.zoom;
+      const angle = Math.atan2(-S.projVel.y, S.projVel.x); // screen space
+      ctx.strokeStyle = `rgba(255,200,150,${Math.min(0.4, v / 200)})`;
+      ctx.lineWidth = r * 1.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(pos.x, pos.y);
+      ctx.lineTo(pos.x - Math.cos(angle) * blurLen, pos.y + Math.sin(angle) * blurLen);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawTargets() {
+  for (const t of targets) {
+    const base = w2s(t.x, 0);
+    const top = w2s(t.x, t.h);
+    const w = t.w * PPM * camera.zoom;
+    const h = base.y - top.y;
+    
+    // Shadow
+    ctx.fillStyle = 'rgba(0,0,0,0.3)';
+    ctx.fillRect(base.x - w / 2 + 3, top.y + 3, w, h);
+    
+    // Target block
+    const grad = ctx.createLinearGradient(base.x - w / 2, top.y, base.x + w / 2, base.y);
+    grad.addColorStop(0, t.hit ? '#5a2020' : '#6b5344');
+    grad.addColorStop(0.5, t.hit ? '#4a1818' : '#8b7355');
+    grad.addColorStop(1, t.hit ? '#3a1010' : '#5a4a3a');
+    ctx.fillStyle = grad;
+    ctx.fillRect(base.x - w / 2, top.y, w, h);
+    
+    // Hit flash
+    if (t.hit && t.flash > 0) {
+      ctx.fillStyle = `rgba(232,100,100,${t.flash * 0.6})`;
+      ctx.fillRect(base.x - w / 2, top.y, w, h);
+      t.flash -= 0.03;
+    }
+    
+    // Cracks on hit
+    if (t.hit) {
+      ctx.strokeStyle = 'rgba(0,0,0,0.4)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.moveTo(base.x - w * 0.3, top.y + h * 0.2);
+      ctx.lineTo(base.x + w * 0.1, top.y + h * 0.5);
+      ctx.lineTo(base.x - w * 0.1, top.y + h * 0.8);
+      ctx.stroke();
+    }
+    
+    // Outline
+    ctx.strokeStyle = t.hit ? 'rgba(232,100,100,0.4)' : 'rgba(80,60,40,0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(base.x - w / 2, top.y, w, h);
+    
+    // Distance label
+    if (camera.zoom > 0.3) {
+      ctx.fillStyle = t.hit ? 'rgba(232,100,100,0.5)' : 'rgba(255,255,255,0.2)';
+      ctx.font = `${Math.round(9 * Math.max(0.7, camera.zoom))}px JetBrains Mono`;
+      ctx.textAlign = 'center';
+      ctx.fillText(Math.round(t.x) + 'm', base.x, base.y + 14);
+    }
+  }
+}
+
+function drawParticles() {
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    const pos = w2s(p.x, p.y);
+    const r = p.size * PPM * camera.zoom;
+    
+    ctx.globalAlpha = p.life;
+    ctx.fillStyle = p.color;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, Math.max(1, r), 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    
+    p.x += p.vx * 0.016;
+    p.y += p.vy * 0.016;
+    p.vy -= G * 0.016;
+    p.life -= 0.018;
+    
+    if (p.life <= 0 || p.y < -1) particles.splice(i, 1);
+  }
+}
+
+function drawTrajectoryPreview() {
+  if (S.phase !== 'ready') return;
+  
+  // Energy-based velocity estimate
+  const cockedGeo = getGeoAtAngle(Math.PI * 0.42);
+  const releasedGeo = getGeoAtAngle(-0.2);
+  const hDrop = Math.max(0, cockedGeo.cw.y - releasedGeo.cw.y);
+  const PE = P.cwMass * G * hDrop;
+  const vEst = Math.sqrt(2 * PE * 0.55 / P.projMass);
+  
+  const angle = P.releaseAngle;
+  const vx = vEst * Math.cos(angle);
+  let vy = vEst * Math.sin(angle);
+  
+  let x = 0, y = P.pivotH + 2; // Approximate launch point
+  
+  ctx.strokeStyle = 'rgba(212,149,106,0.15)';
+  ctx.lineWidth = 2;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  
+  const start = w2s(x, y);
+  ctx.moveTo(start.x, start.y);
+  
+  for (let i = 0; i < 300; i++) {
+    vy -= G * 0.03;
+    x += vx * 0.03;
+    y += vy * 0.03;
+    if (y < 0) break;
+    const p = w2s(x, y);
+    ctx.lineTo(p.x, p.y);
+  }
+  ctx.stroke();
+  ctx.setLineDash([]);
+  
+  // Estimated range
+  const range = (vEst * vEst * Math.sin(2 * angle)) / G;
+  const endP = w2s(range, 0);
+  
+  ctx.fillStyle = 'rgba(212,149,106,0.35)';
+  ctx.beginPath();
+  ctx.arc(endP.x, endP.y, 4, 0, Math.PI * 2);
+  ctx.fill();
+  
+  // Range text
+  ctx.fillStyle = 'rgba(212,149,106,0.4)';
+  ctx.font = '10px JetBrains Mono';
+  ctx.textAlign = 'center';
+  ctx.fillText('~' + Math.round(range) + 'm', endP.x, endP.y - 10);
+}
+
+// ============================================================
+// CAMERA
+// ============================================================
+function updateCamera() {
+  camera.zoom += (camera.targetZoom - camera.zoom) * 0.04;
+  
+  if (S.released && (S.phase === 'firing' || S.phase === 'flying')) {
+    const target = w2s(S.projPos.x, S.projPos.y);
+    const goalX = W * 0.35;
+    const goalY = H * 0.45;
+    camera.x += (goalX - target.x) * 0.04;
+    camera.y += (goalY - (H - target.y)) * 0.04;
+  } else if (S.phase === 'ready') {
+    camera.x += (camera.targetX - camera.x) * 0.05;
+    camera.y += (camera.targetY - camera.y) * 0.05;
+  }
+}
+
+// ============================================================
+// UI
+// ============================================================
+function updateTelemetry() {
+  const armDeg = Math.abs(S.armOmega * 180 / Math.PI);
+  ui.telArmVel.textContent = armDeg.toFixed(0) + '°/s';
+  
+  ui.telTension.textContent = (S.tension / 1000).toFixed(1) + ' kN';
+  
+  let vProj = 0;
+  if (S.released) {
+    vProj = Math.sqrt(S.projVel.x ** 2 + S.projVel.y ** 2);
+  }
+  ui.telProjVel.textContent = vProj.toFixed(1) + ' m/s';
+  
+  ui.telAlt.textContent = (S.released ? Math.max(0, S.projPos.y).toFixed(1) : '0') + ' m';
+  ui.telTime.textContent = S.time.toFixed(2) + ' s';
+  
+  const phases = { ready: 'Ready', firing: 'Launching', flying: 'In Flight', landed: 'Landed' };
+  ui.telPhase.textContent = phases[S.phase] || S.phase;
+}
+
+function addTarget(x) {
+  const h = 2 + Math.random() * 3;
+  targets.push({ x, y: 0, w: 2.5, h, hit: false, flash: 0 });
+  updateHitDisplay();
+}
+
+function fire() {
+  if (S.phase === 'firing' || S.phase === 'flying') return;
+  
+  S.phase = 'firing';
+  S.armAngle = Math.PI * 0.42; // Cocked
+  S.armOmega = 0;
+  S.cwAngle = 0;
+  S.cwOmega = 0;
+  S.slingAngle = -0.3; // Tucked back
+  S.slingOmega = 0;
+  S.released = false;
+  S.time = 0;
+  S.tension = 0;
+  trail = [];
+  particles = [];
+  maxHeight = 0;
+  
+  hitCount = 0;
+  targets.forEach(t => { t.hit = false; t.flash = 0; });
+  updateHitDisplay();
+  
+  ui.fireBtn.disabled = true;
+  ui.status.textContent = 'FIRING';
+  ui.status.className = 'visible firing';
+  ui.telRange.textContent = '—';
+  ui.telMaxH.textContent = '—';
+  ui.telEff.textContent = '—';
+  
+  camera.targetZoom = 1;
+  camera.targetX = W * 0.28;
+  camera.targetY = H * 0.72;
+}
+
+// ============================================================
+// INPUT
+// ============================================================
+function setupInput() {
+  // Sliders
+  ui.mass.addEventListener('input', e => {
+    P.cwMass = +e.target.value;
+    ui.valMass.textContent = P.cwMass + ' kg';
+  });
+  ui.projMass.addEventListener('input', e => {
+    P.projMass = +e.target.value;
+    ui.valProj.textContent = P.projMass + ' kg';
+  });
+  ui.ratio.addEventListener('input', e => {
+    const r = +e.target.value;
+    P.armShort = P.armLong / r;
+    ui.valRatio.textContent = r.toFixed(1) + ':1';
+  });
+  ui.sling.addEventListener('input', e => {
+    P.slingLen = +e.target.value;
+    ui.valSling.textContent = P.slingLen.toFixed(1) + ' m';
+  });
+  ui.releaseAngle.addEventListener('input', e => {
+    P.releaseAngle = +e.target.value * Math.PI / 180;
+    ui.valRelease.textContent = e.target.value + '°';
+  });
+  
+  ui.fireBtn.addEventListener('click', fire);
+  ui.resetBtn.addEventListener('click', resetState);
+  
+  // Keyboard
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space') { e.preventDefault(); fire(); }
+    if (e.code === 'KeyR') resetState();
+  });
+  
+  // Pan & zoom
+  let dragging = false, lastM = { x: 0, y: 0 };
+  
+  canvas.addEventListener('mousedown', e => {
+    if (e.button === 0) {
+      // Check if clicking on ground area for target placement
+      const wp = s2w(e.clientX, e.clientY);
+      if (wp.y < 3 && wp.y > -5 && wp.x > 10 && S.phase !== 'firing') {
+        addTarget(wp.x);
+        return;
+      }
+    }
+    dragging = true;
+    lastM = { x: e.clientX, y: e.clientY };
+  });
+  
+  canvas.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    camera.x += e.clientX - lastM.x;
+    camera.y -= e.clientY - lastM.y; // Inverted because our y is up
+    camera.targetX = camera.x;
+    camera.targetY = camera.y;
+    lastM = { x: e.clientX, y: e.clientY };
+  });
+  
+  canvas.addEventListener('mouseup', () => dragging = false);
+  canvas.addEventListener('mouseleave', () => dragging = false);
+  
+  canvas.addEventListener('wheel', e => {
+    e.preventDefault();
+    camera.targetZoom *= Math.exp(-e.deltaY * 0.001);
+    camera.targetZoom = Math.max(0.15, Math.min(2.5, camera.targetZoom));
+  }, { passive: false });
+  
+  // Touch support
+  let lastTouchDist = 0;
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 1) {
+      dragging = true;
+      lastM = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      lastTouchDist = Math.sqrt(dx * dx + dy * dy);
+    }
+  }, { passive: true });
+  
+  canvas.addEventListener('touchmove', e => {
+    e.preventDefault();
+    if (e.touches.length === 1 && dragging) {
+      camera.x += e.touches[0].clientX - lastM.x;
+      camera.y -= e.touches[0].clientY - lastM.y;
+      camera.targetX = camera.x;
+      camera.targetY = camera.y;
+      lastM = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    }
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (lastTouchDist > 0) {
+        camera.targetZoom *= dist / lastTouchDist;
+        camera.targetZoom = Math.max(0.15, Math.min(2.5, camera.targetZoom));
+      }
+      lastTouchDist = dist;
+    }
+  }, { passive: false });
+  
+  canvas.addEventListener('touchend', () => { dragging = false; lastTouchDist = 0; });
+}
+
+// ============================================================
+// MAIN LOOP
+// ============================================================
+function loop(ts) {
+  const dt = Math.min((ts - lastTime) / 1000, 0.04);
+  lastTime = ts;
+  
+  updateCamera();
+  stepPhysics(dt);
+  updateTelemetry();
+  
+  // Render
+  drawSky();
+  drawGrid();
+  drawGround();
+  drawTrajectoryPreview();
+  drawTargets();
+  drawTrebuchet();
+  drawProjectile();
+  drawParticles();
+  
+  requestAnimationFrame(loop);
+}
+
+init();
+</script>
+</body>
+</html>
+

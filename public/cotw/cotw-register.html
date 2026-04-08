@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<!--
+ ============================================================================
+ The Expanse v011 — Council of the Wise Registration
+ ============================================================================
+
+ WHAT THIS FILE IS:
+ ---------------------------------------------------------------------------
+ Registration gateway for The Expanse terminal experience.
+ Users enter credentials and an optional purchase code.
+ POST to /auth/register, then redirect based on has_purchase_code flag:
+   - Code holder → /cotw/cotw-dossier.html (full terminal)
+   - No code     → /cotw/cotw-holding.html (holding page)
+
+ ARCHITECTURE:
+ ---------------------------------------------------------------------------
+ - Vanilla JavaScript, no frameworks
+ - Terminal aesthetic (#00ff75 on black, cold-war instrument design)
+ - No inline scripts or styles (hardened CSP)
+ - ARIA landmarks, WCAG 2.2 AA+ compliant
+ - ES module loaded via registerHandler.js
+
+ FIELDS:
+ ---------------------------------------------------------------------------
+ - username    (required)
+ - email       (required)
+ - password    (required, min 8 chars)
+ - purchase_code (optional — printed inside t-shirt)
+
+ FLOW:
+ ---------------------------------------------------------------------------
+ 1. Page load → check /auth/check → redirect if already authenticated
+ 2. User enters credentials + optional purchase code
+ 3. Form submit → POST /auth/register (via registerHandler.js)
+ 4. Success + has_purchase_code → redirect to /cotw/cotw-dossier.html
+ 5. Success + no code          → redirect to /cotw/cotw-holding.html
+ 6. Failure → error message with screen reader announcement
+
+ ============================================================================
+ Project: The Expanse v011
+ Author: James (Project Manager)
+ Date: March 31, 2026
+ ============================================================================
+-->
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self';
+        connect-src 'self';
+        img-src 'self' data:;
+        font-src 'self';
+        object-src 'none';
+        base-uri 'self';
+        frame-ancestors 'none';
+        form-action 'self';
+    ">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="The Expanse v011 — Council of the Wise Registration">
+
+    <title>The Expanse — Register</title>
+
+    <link rel="preload" href="/cms/css/cms-styles.css" as="style">
+    <link rel="modulepreload" href="js/registerHandler.js">
+
+    <link rel="stylesheet" href="/cms/css/cms-styles.css">
+    <link rel="stylesheet" href="css/cotw-login.css">
+</head>
+<body>
+    <a href="#register-username" class="sr-only" id="skip-link">Skip to registration</a>
+
+    <noscript>
+        <div style="background:#000;color:#00ff75;padding:40px;font-family:monospace;text-align:center;">
+            <p>The Expanse requires JavaScript to operate.</p>
+            <p>Please enable JavaScript and reload the page.</p>
+        </div>
+    </noscript>
+
+    <main class="login-page" aria-label="Registration">
+        <div class="login-container" data-testid="register-container">
+
+            <header class="login-header">
+                <h1 class="login-title">Council of the Wise</h1>
+                <p class="login-subtitle">New Operative Registration</p>
+            </header>
+
+            <form
+                id="register-form"
+                class="login-form"
+                data-testid="register-form"
+                novalidate
+            >
+                <div class="login-field">
+                    <label for="register-username" class="login-label">Username</label>
+                    <input
+                        type="text"
+                        id="register-username"
+                        name="username"
+                        class="login-input"
+                        data-testid="register-username"
+                        placeholder="CHOOSE A USERNAME"
+                        autocomplete="off"
+                        spellcheck="false"
+                        autofocus
+                        required
+                        aria-required="true"
+                        aria-describedby="error-message"
+                        minlength="3"
+                        maxlength="50"
+                    >
+                </div>
+
+                <div class="login-field">
+                    <label for="register-email" class="login-label">Email</label>
+                    <input
+                        type="email"
+                        id="register-email"
+                        name="email"
+                        class="login-input"
+                        data-testid="register-email"
+                        placeholder="YOUR EMAIL ADDRESS"
+                        autocomplete="off"
+                        spellcheck="false"
+                        required
+                        aria-required="true"
+                        aria-describedby="error-message"
+                        maxlength="255"
+                    >
+                </div>
+
+                <div class="login-field">
+                    <label for="register-password" class="login-label">Password</label>
+                    <input
+                        type="password"
+                        id="register-password"
+                        name="password"
+                        class="login-input"
+                        data-testid="register-password"
+                        placeholder="MINIMUM 8 CHARACTERS"
+                        autocomplete="new-password"
+                        required
+                        aria-required="true"
+                        aria-describedby="error-message"
+                        minlength="8"
+                        maxlength="128"
+                    >
+                </div>
+
+                <div class="login-field">
+                    <label for="register-code" class="login-label">
+                        Purchase Code <span class="login-label-optional">(optional)</span>
+                    </label>
+                    <input
+                        type="text"
+                        id="register-code"
+                        name="purchase_code"
+                        class="login-input"
+                        data-testid="register-code"
+                        placeholder="PRINTED INSIDE YOUR T-SHIRT"
+                        autocomplete="off"
+                        spellcheck="false"
+                        maxlength="12"
+                        aria-describedby="error-message code-hint"
+                    >
+                    <span id="code-hint" class="login-field-hint">
+                        No code? You can still register and add one later.
+                    </span>
+                </div>
+
+                <div
+                    id="error-message"
+                    class="login-error"
+                    role="alert"
+                    aria-live="assertive"
+                    aria-hidden="true"
+                    data-testid="register-error"
+                ></div>
+
+                <button
+                    type="submit"
+                    class="login-submit"
+                    data-testid="register-submit"
+                    aria-busy="false"
+                >REGISTER</button>
+
+            </form>
+
+            <p class="login-nav-hint">
+                Already registered? <a href="/cotw/cotw-login.html" class="login-nav-link">Sign in →</a>
+            </p>
+
+        </div>
+    </main>
+
+    <script type="module" src="js/registerHandler.js" fetchpriority="high"></script>
+
+</body>
+</html>

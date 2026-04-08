@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<!--
+ ============================================================================
+ The Expanse v010 — CMS Admin Terminal
+ File: public/cms/index.html
+ ============================================================================
+
+ WHAT THIS FILE IS:
+ ---------------------------------------------------------------------------
+ The single HTML entry point for The Expanse admin content management system.
+ Provides a dynamic five-zone CSS Grid layout that auto-morphs based on
+ which panels are visible.
+
+ LAYOUT GRID:
+ ---------------------------------------------------------------------------
+ .cms-container (CSS Grid: auto 1fr auto columns, auto 1fr auto rows)
+
+   Col 1 (auto):   nav.panel--menu       Sidebar, clamp(200px, 20vw, 300px)
+   Col 2 (1fr):    Top bar / Terminal / Bottom bar
+   Col 3 (auto):   aside.panel--content  Sidebar, clamp(200px, 20vw, 300px)
+
+   Hiding any panel causes the grid to auto-redistribute space.
+   Terminal NEVER hides. Toggle buttons in terminal header control all panels.
+
+ ============================================================================
+ Project: The Expanse v010
+ Author: James (Project Manager)
+ Created: February 13, 2026
+ Updated: February 24, 2026 — Dynamic five-zone with toggle controls
+ ============================================================================
+-->
+<html lang="en" dir="ltr" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="
+        default-src 'self';
+        script-src 'self';
+        style-src 'self';
+        connect-src 'self' ws: wss:;
+        img-src 'self' data:;
+        font-src 'self';
+        object-src 'none';
+        base-uri 'self';
+        form-action 'self';
+    ">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
+    <meta name="theme-color" content="#000000">
+    <meta name="description" content="The Expanse v010 Admin Terminal — Content Management System">
+
+    <title>The Expanse — Admin Terminal v010</title>
+
+    <link rel="preload" href="css/cms-styles.css" as="style">
+    <link rel="modulepreload" href="js/adminMenu.js">
+    <link rel="modulepreload" href="js/cmsBootstrap.js">
+    <link rel="modulepreload" href="js/apiClient.js">
+    <link rel="modulepreload" href="js/viewController.js">
+
+    <link rel="stylesheet" href="/shared/css/psychic-radar.css">
+    <link rel="stylesheet" href="css/cms-styles.css">
+    <link rel="stylesheet" href="css/ockhamsRazorView.css">
+    <link rel="stylesheet" href="css/wwddGunsightView.css">
+</head>
+<body>
+    <a href="#command-input" class="sr-only" id="skip-link">Skip to command input</a>
+
+    <noscript>
+        <div class="noscript-fallback">
+            <p>The Expanse Admin Terminal requires JavaScript to operate.</p>
+            <p>Please enable JavaScript and reload the page.</p>
+        </div>
+    </noscript>
+
+    <div class="cms-container">
+
+        <!-- LEFT PANEL — Admin Menu (col 1, spans all rows) -->
+        <nav class="panel panel--menu" aria-label="Admin navigation">
+            <header class="panel__header">
+                <span class="panel__title">Admin</span>
+                <span class="panel__status">v010</span>
+            </header>
+            <div class="panel__body" id="admin-menu">
+                <div class="loading" aria-busy="true">Initialising...</div>
+            </div>
+        </nav>
+
+        <!-- TOP BAR — Collapsible (col 2, row 1) -->
+        <div class="panel panel--top" id="panel-top" aria-label="System status bar" hidden>
+            <div class="panel__body">
+            </div>
+        </div>
+
+        <!-- CENTRE PANEL — Claude Terminal (col 2, row 2) -->
+        <main class="panel panel--terminal" aria-label="Claude terminal">
+            <header class="terminal-header">
+                <div class="terminal-header__toggles-left">
+                    <button
+                        class="toggle-btn toggle-btn--active"
+                        data-target="panel--menu"
+                        aria-label="Toggle admin menu"
+                        aria-expanded="true"
+                        title="Menu"
+                    >&#9776;</button>
+                    <button
+                        class="toggle-btn"
+                        data-target="panel-top"
+                        aria-label="Toggle top bar"
+                        aria-expanded="false"
+                        title="Top bar"
+                    >&#9650;</button>
+                </div>
+                <span class="terminal-header__title">Claude Terminal</span>
+                <span class="terminal-header__status" id="connection-status" role="status">Disconnected</span>
+                <div class="terminal-header__toggles-right">
+                    <button
+                        class="toggle-btn"
+                        data-target="panel-bottom"
+                        aria-label="Toggle bottom bar"
+                        aria-expanded="false"
+                        title="Bottom bar"
+                    >&#9660;</button>
+                    <button
+                        class="toggle-btn toggle-btn--active"
+                        data-target="panel--content"
+                        aria-label="Toggle content panel"
+                        aria-expanded="true"
+                        title="Content"
+                    >&#9776;</button>
+                </div>
+            </header>
+            <div
+                class="terminal__chat"
+                id="chat-output"
+                role="log"
+                aria-live="polite"
+                aria-atomic="false"
+                aria-relevant="additions"
+                aria-label="Chat history"
+            >
+            </div>
+            <div class="terminal__input-area">
+                <span class="terminal__prompt" aria-hidden="true">&gt;</span>
+                <label for="command-input" class="sr-only">Enter command</label>
+                <input
+                    type="text"
+                    id="command-input"
+                    class="terminal__command"
+                    placeholder="Type a command..."
+                    autocomplete="off"
+                    spellcheck="false"
+                    autofocus
+                    aria-describedby="input-hint"
+                    aria-controls="chat-output"
+                >
+                <div id="input-hint" class="sr-only">
+                    Command input focused. Type a command and press Enter to send.
+                    Press Tab to navigate to other panels.
+                </div>
+            </div>
+        </main>
+
+        <!-- BOTTOM BAR — Collapsible (col 2, row 3) -->
+        <div class="panel panel--bottom" id="panel-bottom" aria-label="System info bar" hidden>
+            <div class="panel__body">
+            </div>
+        </div>
+
+        <!-- RIGHT PANEL — Content Display (col 3, spans all rows) -->
+        <aside class="panel panel--content" aria-label="Content display">
+            <header class="panel__header">
+                <span class="panel__title">Content</span>
+                <span class="panel__status" id="content-status">Idle</span>
+            </header>
+            <div class="panel__body" id="content-display">
+                <div class="content-placeholder">
+                    <div class="content-placeholder__icon" aria-hidden="true">&#9632;</div>
+                    <div class="content-placeholder__text">
+                        Select an item from the menu<br>to view details here.
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+    </div>
+
+    <div class="toast-container" id="toast-container" role="alert" aria-live="assertive"></div>
+
+    <script src="js/vendor/socket.io.min.js"></script>
+
+    <script type="module" src="js/adminMenu.js" fetchpriority="high"></script>
+    <script type="module" src="js/cmsBootstrap.js"></script>
+    <script type="module" src="js/cmsSocketHandler.js"></script>
+    <script type="module" src="js/cmsPanelToggle.js"></script>
+
+</body>
+</html>
